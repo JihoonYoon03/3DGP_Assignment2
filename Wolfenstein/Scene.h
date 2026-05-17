@@ -3,6 +3,9 @@
 #include "Timer.h"
 #include "Shader.h"
 
+class CButtonObject;
+class CCamera;
+
 class CScene
 {
 public:
@@ -21,19 +24,27 @@ public:
 
 	void ReleaseUploadBuffers();
 
-	// ±×·¡ÇÈ ·çÆ® ½Ã±×³ÊÃÄ¸¦ »ý¼ºÇÑ´Ù.
+	void HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight, const CCamera* pCamera);
+	bool IsGameStartRequested() const { return m_bGameStartRequested; }
+
+	// ï¿½×·ï¿½ï¿½ï¿½ ï¿½ï¿½Æ® ï¿½Ã±×³ï¿½ï¿½Ä¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
 	ID3D12RootSignature* CreateGraphicsRootSignature(ID3D12Device *pd3dDevice);
 	ID3D12RootSignature* GetGraphicsRootSignature();
 
+
+
+	std::shared_ptr<CButtonObject> m_pStartButton;
+	bool m_bGameStartRequested = false;
+
 protected:
-	// ·çÆ® ½Ã±×³ÊÃÄ¸¦ ³ªÅ¸³»´Â ÀÎÅÍÆäÀÌ½º Æ÷ÀÎÅÍÀÌ´Ù. 
-	// Root Signature - GPU ÆÄÀÌÇÁ¶óÀÎ°ú µ¥ÀÌÅÍ »çÀÌÀÇ Åë·Î, °è¾à¼­
-	// ¼ÎÀÌ´õ ½ÇÇà ½Ã ¾î¶² Á¾·ùÀÇ µ¥ÀÌÅÍ¸¦ ¾î¶² ½½·Ô¿¡ ³Ñ°Ü¹ÞÀ» °ÍÀÎÁö Á¤ÀÇ.
-	// GPU°¡ ÀÐÀ» µ¥ÀÌÅÍÀÇ ¸ñÂ÷ÀÓ.
-	// Root Parameter - DescriptorTable(DescHeapÀÇ ÁýÇÕ), Rood Descriptor(CBV), Root Constant(»ó¼ö)
-	// DescTable - ¼ÎÀÌ´õ°¡ DescHeap¿¡¼­ÀÇ ¾îµð¼­ºÎÅÍ ¾îµð±îÁö ÀÐ¾îµéÀÏÁö ¹üÀ§ ÁöÁ¤
+	// ï¿½ï¿½Æ® ï¿½Ã±×³ï¿½ï¿½Ä¸ï¿½ ï¿½ï¿½Å¸ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì´ï¿½. 
+	// Root Signature - GPU ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î°ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿? ï¿½ï¿½à¼?
+	// ï¿½ï¿½ï¿½Ì´ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½î¶² ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Í¸ï¿½ ï¿½î¶² ï¿½ï¿½ï¿½Ô¿ï¿½ ï¿½Ñ°Ü¹ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
+	// GPUï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
+	// Root Parameter - DescriptorTable(DescHeapï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½), Rood Descriptor(CBV), Root Constant(ï¿½ï¿½ï¿?
+	// DescTable - ï¿½ï¿½ï¿½Ì´ï¿½ï¿½ï¿½ DescHeapï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ð¼?ï¿½ï¿½ï¿?ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ð¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿?ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	ComPtr<ID3D12RootSignature> m_pd3dGraphicsRootSignature;
 
-	// Batch Ã³¸®¸¦ ÇÏ±â À§ÇØ ¾ÀÀ» ¼ÎÀÌ´õµéÀÇ ¸®½ºÆ®·Î Ç¥ÇöÇÑ´Ù
+	// Batch Ã³ï¿½ï¿½ï¿½ï¿½ ï¿½Ï±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì´ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Æ®ï¿½ï¿½ Ç¥ï¿½ï¿½ï¿½Ñ´ï¿½
 	std::vector<CObjectsShader> m_vShaders;
 };

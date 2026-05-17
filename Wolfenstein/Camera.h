@@ -11,9 +11,9 @@ struct VS_CB_CAMERA_INFO
 
 class CCamera {
 protected:
-	// 카메라 변환 행렬
+	// ???? ??? ???
 	XMFLOAT4X4		m_xmf4x4View;
-	// 투영 변환 행렬
+	// ???? ??? ???
 	XMFLOAT4X4		m_xmf4x4Projection;
 
 	D3D12_VIEWPORT	m_d3dViewport;
@@ -32,7 +32,10 @@ public:
 	
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ =	0.0f, float fMaxZ = 1.0f);
 	void SetScissorRect(LONG xLeft, LONG yTop, LONG xRight, LONG yBottom);
-	
+
 	virtual void SetViewportsAndScissorRects(ID3D12GraphicsCommandList* pd3dCommandList);
+
+	const XMFLOAT4X4& GetViewMatrix() const { return m_xmf4x4View; }
+	const XMFLOAT4X4& GetProjectionMatrix() const { return m_xmf4x4Projection; }
 };
 

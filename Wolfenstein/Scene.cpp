@@ -2,6 +2,7 @@
 #include "Scene.h"
 #include "Shader.h"
 #include "Camera.h"
+#include "Landing.h"
 
 CScene::CScene()
 {
@@ -11,7 +12,7 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 {
 	ID3D12RootSignature* pd3dGraphicsRootSignature = NULL;
 
-	// 월드 변환, 뷰/투영 변환 행렬을 나타내는 루트 파라미터
+	// ???? ???, ??/???? ??? ????????????? ??? ???????
 	D3D12_ROOT_PARAMETER pd3dRootParameters[2];
 	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	pd3dRootParameters[0].Constants.Num32BitValues = 16;
@@ -68,12 +69,16 @@ ID3D12RootSignature* CScene::GetGraphicsRootSignature()
 
 void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	// 그래픽 루트 시그너쳐를 생성한다.
+	// ????? ??? ?n???ĸ? ???????.
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
 	m_vShaders.emplace_back();
 	m_vShaders.back().CreateShader(pd3dDevice, m_pd3dGraphicsRootSignature.Get());
 	m_vShaders.back().BuildObjects(pd3dDevice, pd3dCommandList);
+
+	std::vector<std::shared_ptr<CGameObject>> vLandingObjects;
+	BuildLandingObjects(pd3dDevice, pd3dCommandList, vLandingObjects, m_pStartButton);
+	m_vShaders.back().SetObjects(std::move(vLandingObjects));
 }
 
 void CScene::ReleaseObjects()
@@ -126,6 +131,22 @@ void CScene::ReleaseUploadBuffers()
 {
 	for (CObjectsShader& shader : m_vShaders) {
 		shader.ReleaseUploadBuffers();
+	}
+}
+
+void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight, const CCamera* pCamera)
+{
+	if (!m_pStartButton || !pCamera) return;
+	if (m_bGameStartRequested) return;
+
+	const XMFLOAT4X4& view = pCamera->GetViewMatrix();
+	const XMFLOAT4X4& proj = pCamera->GetProjectionMatrix();
+
+	if (m_pStartButton->HitTest(nMouseX, nMouseY, nScreenWidth, nScreenHeight, view, proj))
+	{
+		m_pStartButton->SetPressed(true);
+		m_bGameStartRequested = true;
+		::OutputDebugStringA("[Landing] Game Start button clicked.\n");
 	}
 }
 
