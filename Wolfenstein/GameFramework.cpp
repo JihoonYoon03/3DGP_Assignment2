@@ -386,6 +386,26 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			::PostQuitMessage(0);
 			break;
 		case VK_RETURN:
+			// Enter on the landing screen has the same effect as clicking Start.
+			if (m_pScene && m_pScene->GetCurrentState() == SceneState::LANDING) {
+				m_pScene->TransitionToScene(SceneState::MAP1);
+				SetupGameCamera();
+			}
+			break;
+			// Keys 1 / 2 switch freely between the two in-game maps (requirement 2).
+		case '1':
+		case VK_NUMPAD1:
+			if (m_pScene) {
+				m_pScene->TransitionToScene(SceneState::MAP1);
+				SetupGameCamera();
+			}
+			break;
+		case '2':
+		case VK_NUMPAD2:
+			if (m_pScene) {
+				m_pScene->TransitionToScene(SceneState::MAP2);
+				SetupGameCamera();
+			}
 			break;
 			// "F9" ??? ???????? ?????? ???? ??u??? ????? ????? o?????.
 		case VK_F9:
@@ -469,7 +489,24 @@ void CGameFramework::ProcessInput()
 
 void CGameFramework::AnimateObjects()
 {
-	if (m_pScene) m_pScene->AnimateObjects(m_GameTimer.GetTimeElapsed());
+	if (!m_pScene) return;
+	m_pScene->AnimateObjects(m_GameTimer.GetTimeElapsed());
+
+	// When the Game Start button is pressed on the landing screen, auto-transition to MAP1.
+	if (m_pScene->IsGameStartRequested() && m_pScene->GetCurrentState() == SceneState::LANDING) {
+		m_pScene->TransitionToScene(SceneState::MAP1);
+		SetupGameCamera();
+	}
+}
+
+void CGameFramework::SetupGameCamera()
+{
+	if (!m_pCamera) return;
+	// Slightly elevated angled view that frames the whole map below.
+	m_pCamera->GenerateViewMatrix(
+		XMFLOAT3(0.0f, 50.0f, -55.0f),
+		XMFLOAT3(0.0f, 0.0f, 0.0f),
+		XMFLOAT3(0.0f, 1.0f, 0.0f));
 }
 
 void CGameFramework::WaitForGPUComplete()

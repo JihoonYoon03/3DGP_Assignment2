@@ -6,6 +6,15 @@
 class CButtonObject;
 class CCamera;
 
+// ¾ÀÀÇ ÇöÀç »óÅÂ¸¦ ³ªÅ¸³»´Â ¿­°ÅÇüÀÌ´Ù.
+// LANDING: ½ÃÀÛ È­¸é. MAP1/MAP2: µÎ °¡Áö ÀÎ°ÔÀÓ ¸Ê (¿ä±¸»çÇ× 2).
+enum class SceneState {
+	LANDING = 0,
+	MAP1 = 1,
+	MAP2 = 2,
+	COUNT = 3
+};
+
 class CScene
 {
 public:
@@ -27,24 +36,26 @@ public:
 	void HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight, const CCamera* pCamera);
 	bool IsGameStartRequested() const { return m_bGameStartRequested; }
 
-	// ï¿½×·ï¿½ï¿½ï¿½ ï¿½ï¿½Æ® ï¿½Ã±×³ï¿½ï¿½Ä¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
+	// ¾À »óÅÂ °ü¸®: ÇöÀç »óÅÂ¸¦ Á¶È¸ÇÏ°Å³ª ´Ù¸¥ ¾ÀÀ¸·Î ÀüÈ¯ÇÑ´Ù.
+	SceneState GetCurrentState() const { return m_eCurrentState; }
+	void TransitionToScene(SceneState newState);
+
+	// ±×·¡ÇÈ½º ·çÆ® ½Ã±×³ÊÃ³¸¦ »ý¼ºÇÑ´Ù.
 	ID3D12RootSignature* CreateGraphicsRootSignature(ID3D12Device *pd3dDevice);
 	ID3D12RootSignature* GetGraphicsRootSignature();
-
-
 
 	std::shared_ptr<CButtonObject> m_pStartButton;
 	bool m_bGameStartRequested = false;
 
 protected:
-	// ï¿½ï¿½Æ® ï¿½Ã±×³ï¿½ï¿½Ä¸ï¿½ ï¿½ï¿½Å¸ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì´ï¿½. 
-	// Root Signature - GPU ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î°ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿? ï¿½ï¿½à¼?
-	// ï¿½ï¿½ï¿½Ì´ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½î¶² ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Í¸ï¿½ ï¿½î¶² ï¿½ï¿½ï¿½Ô¿ï¿½ ï¿½Ñ°Ü¹ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
-	// GPUï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
-	// Root Parameter - DescriptorTable(DescHeapï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½), Rood Descriptor(CBV), Root Constant(ï¿½ï¿½ï¿?
-	// DescTable - ï¿½ï¿½ï¿½Ì´ï¿½ï¿½ï¿½ DescHeapï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ð¼?ï¿½ï¿½ï¿?ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ð¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿?ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+	// ÇöÀç È°¼ºÈ­µÈ ¾ÀÀÇ »óÅÂÀÌ´Ù (±âº»°ªÀº LANDING).
+	SceneState m_eCurrentState = SceneState::LANDING;
+
+	// ·çÆ® ½Ã±×³ÊÃ³¸¦ ³ªÅ¸³»´Â ÀÎÅÍÆäÀÌ½º Æ÷ÀÎÅÍÀÌ´Ù.
+	// Root Signature - GPU ÆÄÀÌÇÁ¶óÀÎ °¢ ´Ü°è°¡ ¾î¶² ÀÚ¿øÀ» ¾î¶² ½½·Ô¿¡ ³Ñ°Ü¹ÞÀ»Áö Á¤ÀÇÇÑ´Ù.
 	ComPtr<ID3D12RootSignature> m_pd3dGraphicsRootSignature;
 
-	// Batch Ã³ï¿½ï¿½ï¿½ï¿½ ï¿½Ï±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì´ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Æ®ï¿½ï¿½ Ç¥ï¿½ï¿½ï¿½Ñ´ï¿½
+	// ¾À »óÅÂ¸¶´Ù ÇÏ³ªÀÇ ¼ÎÀÌ´õ¸¦ µÎ¾î, ÇöÀç »óÅÂÀÇ ¼ÎÀÌ´õ¸¸ ·»´õ¸µÇÑ´Ù.
+	// ÀÎµ¦½º´Â SceneState ¿­°Å°ª(LANDING=0, MAP1=1, MAP2=2)À» ±×´ë·Î »ç¿ëÇÑ´Ù.
 	std::vector<CObjectsShader> m_vShaders;
 };

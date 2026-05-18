@@ -79,7 +79,8 @@ CTriangleMesh::CTriangleMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 // ====================================================================================
 // ====================================================================================
 CCubeMeshDiffused::CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
-	float fWidth, float fHeight, float fDepth)
+	float fWidth, float fHeight, float fDepth,
+	bool bUseUniformColor, XMFLOAT4 xmf4Color)
 	: CMesh(pd3dDevice, pd3dCommandList)
 {
 	m_nVertices = 8;
@@ -89,15 +90,21 @@ CCubeMeshDiffused::CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 	float fx = fWidth * 0.5f, fy = fHeight * 0.5f, fz = fDepth * 0.5f;
 	
 	// 직육면체의 꼭지점 8개의 정점 데이터
+	// bUseUniformColor : true means all 8 vertices share the same uniform color;
+	// false keeps the original per-vertex random color behaviour.
+	auto VertexColor = [&]() -> XMFLOAT4 {
+		return bUseUniformColor ? xmf4Color : RANDOM_COLOR;
+	};
+
 	CDiffusedVertex pVertices[8];
-	pVertices[0] = CDiffusedVertex(XMFLOAT3(-fx, +fy, -fz), RANDOM_COLOR);
-	pVertices[1] = CDiffusedVertex(XMFLOAT3(+fx, +fy, -fz), RANDOM_COLOR);
-	pVertices[2] = CDiffusedVertex(XMFLOAT3(+fx, +fy, +fz), RANDOM_COLOR);
-	pVertices[3] = CDiffusedVertex(XMFLOAT3(-fx, +fy, +fz), RANDOM_COLOR);
-	pVertices[4] = CDiffusedVertex(XMFLOAT3(-fx, -fy, -fz), RANDOM_COLOR);
-	pVertices[5] = CDiffusedVertex(XMFLOAT3(+fx, -fy, -fz), RANDOM_COLOR);
-	pVertices[6] = CDiffusedVertex(XMFLOAT3(+fx, -fy, +fz), RANDOM_COLOR);
-	pVertices[7] = CDiffusedVertex(XMFLOAT3(-fx, -fy, +fz), RANDOM_COLOR);
+	pVertices[0] = CDiffusedVertex(XMFLOAT3(-fx, +fy, -fz), VertexColor());
+	pVertices[1] = CDiffusedVertex(XMFLOAT3(+fx, +fy, -fz), VertexColor());
+	pVertices[2] = CDiffusedVertex(XMFLOAT3(+fx, +fy, +fz), VertexColor());
+	pVertices[3] = CDiffusedVertex(XMFLOAT3(-fx, +fy, +fz), VertexColor());
+	pVertices[4] = CDiffusedVertex(XMFLOAT3(-fx, -fy, -fz), VertexColor());
+	pVertices[5] = CDiffusedVertex(XMFLOAT3(+fx, -fy, -fz), VertexColor());
+	pVertices[6] = CDiffusedVertex(XMFLOAT3(+fx, -fy, +fz), VertexColor());
+	pVertices[7] = CDiffusedVertex(XMFLOAT3(-fx, -fy, +fz), VertexColor());
 
 	m_pd3dVertexBuffer = ::CreateBufferResource(
 		pd3dDevice,
