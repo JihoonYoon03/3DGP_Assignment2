@@ -2,6 +2,7 @@
 #include <windowsx.h>
 #include "GameFramework.h"
 #include "Camera.h"
+#include "Maps.h"
 
 CGameFramework::CGameFramework()
 {
@@ -389,7 +390,7 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			// Enter on the landing screen has the same effect as clicking Start.
 			if (m_pScene && m_pScene->GetCurrentState() == SceneState::LANDING) {
 				m_pScene->TransitionToScene(SceneState::MAP1);
-				SetupGameCamera();
+				SetupGameCamera(SceneState::MAP1);
 			}
 			break;
 			// Keys 1 / 2 switch freely between the two in-game maps (requirement 2).
@@ -397,14 +398,14 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_NUMPAD1:
 			if (m_pScene) {
 				m_pScene->TransitionToScene(SceneState::MAP1);
-				SetupGameCamera();
+				SetupGameCamera(SceneState::MAP1);
 			}
 			break;
 		case '2':
 		case VK_NUMPAD2:
 			if (m_pScene) {
 				m_pScene->TransitionToScene(SceneState::MAP2);
-				SetupGameCamera();
+				SetupGameCamera(SceneState::MAP2);
 			}
 			break;
 			// "F9" ??? ???????? ?????? ???? ??u??? ????? ????? o?????.
@@ -495,18 +496,21 @@ void CGameFramework::AnimateObjects()
 	// When the Game Start button is pressed on the landing screen, auto-transition to MAP1.
 	if (m_pScene->IsGameStartRequested() && m_pScene->GetCurrentState() == SceneState::LANDING) {
 		m_pScene->TransitionToScene(SceneState::MAP1);
-		SetupGameCamera();
+		SetupGameCamera(SceneState::MAP1);
 	}
 }
 
-void CGameFramework::SetupGameCamera()
+void CGameFramework::SetupGameCamera(SceneState state)
 {
 	if (!m_pCamera) return;
-	// Slightly elevated angled view that frames the whole map below.
-	m_pCamera->GenerateViewMatrix(
-		XMFLOAT3(0.0f, 50.0f, -55.0f),
-		XMFLOAT3(0.0f, 0.0f, 0.0f),
-		XMFLOAT3(0.0f, 1.0f, 0.0f));
+	// 각 맵의 1인칭 시작 위치/시점을 그 맵의 MapInfo에서 가져온다.
+	MapInfo info;
+	switch (state) {
+	case SceneState::MAP1: info = GetMap1Info(); break;
+	case SceneState::MAP2: info = GetMap2Info(); break;
+	default: return; // LANDING은 별도의 카메라를 유지한다.
+	}
+	m_pCamera->GenerateViewMatrix(info.cameraPosition, info.cameraLookAt, XMFLOAT3(0.0f, 1.0f, 0.0f));
 }
 
 void CGameFramework::WaitForGPUComplete()

@@ -43,8 +43,8 @@ public:
 
 	void ChangeSwapChainState();
 
-	// Setup the in-game camera (called when transitioning Landing -> Map).
-	void SetupGameCamera();
+	// Setup the in-game first-person camera for the given map state.
+	void SetupGameCamera(SceneState state);
 
 	void MoveToNextFrame();
 
