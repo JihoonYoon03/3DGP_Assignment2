@@ -19,6 +19,15 @@ protected:
 	D3D12_VIEWPORT	m_d3dViewport;
 	D3D12_RECT		m_d3dScissorRect;
 
+	// 1??? ???? ???¢¬? ??????? ???? ??????.
+	XMFLOAT3	m_xmf3Position{ 0.0f, 0.0f, 0.0f };
+	XMFLOAT3	m_xmf3Right{ 1.0f, 0.0f, 0.0f };
+	XMFLOAT3	m_xmf3Up{ 0.0f, 1.0f, 0.0f };
+	XMFLOAT3	m_xmf3Look{ 0.0f, 0.0f, 1.0f };
+	// Pitch / Yaw (??)
+	float		m_fPitch = 0.0f;
+	float		m_fYaw = 0.0f;
+
 public:
 	CCamera();
 	virtual ~CCamera();
@@ -28,6 +37,16 @@ public:
 	virtual void UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList);
 
 	void GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up);
+
+	// 1??? ???? ???/??? API.
+	void Move(const XMFLOAT3& xmf3Shift);
+	void SetPosition(const XMFLOAT3& xmf3Position);
+	void Rotate(float fPitchDelta, float fYawDelta);
+	void RegenerateViewMatrix();
+
+	const XMFLOAT3& GetPosition() const { return m_xmf3Position; }
+	const XMFLOAT3& GetLook() const { return m_xmf3Look; }
+	const XMFLOAT3& GetRight() const { return m_xmf3Right; }
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
 	
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ =	0.0f, float fMaxZ = 1.0f);

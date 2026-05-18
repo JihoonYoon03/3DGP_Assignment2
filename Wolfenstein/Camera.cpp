@@ -39,7 +39,88 @@ void CCamera::GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlane
 
 void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up)
 {
+	// ?? ??┬? 1??? ???? ???レ? ??? a????? Move/Rotate ??? ???????? ???.
+	m_xmf3Position = xmf3Position;
+
+	XMVECTOR vPos = XMLoadFloat3(&xmf3Position);
+	XMVECTOR vAt  = XMLoadFloat3(&xmf3LookAt);
+	XMVECTOR vUpHint = XMLoadFloat3(&xmf3Up);
+
+	XMVECTOR vLook = XMVector3Normalize(XMVectorSubtract(vAt, vPos));
+	XMVECTOR vRight = XMVector3Normalize(XMVector3Cross(vUpHint, vLook));
+	XMVECTOR vUp = XMVector3Normalize(XMVector3Cross(vLook, vRight));
+
+	XMStoreFloat3(&m_xmf3Look, vLook);
+	XMStoreFloat3(&m_xmf3Right, vRight);
+	XMStoreFloat3(&m_xmf3Up, vUp);
+
+	// look ????リ??? yaw/pitch?? ?????? ???? Rotate ???? ??????? ????? ?? ????? ???.
+	m_fPitch = asinf(m_xmf3Look.y);
+	m_fYaw = atan2f(m_xmf3Look.x, m_xmf3Look.z);
+
 	m_xmf4x4View = Matrix4x4::LookAtLH(xmf3Position, xmf3LookAt, xmf3Up);
+}
+
+void CCamera::Move(const XMFLOAT3& xmf3Shift)
+{
+	m_xmf3Position.x += xmf3Shift.x;
+	m_xmf3Position.y += xmf3Shift.y;
+	m_xmf3Position.z += xmf3Shift.z;
+	RegenerateViewMatrix();
+}
+
+void CCamera::SetPosition(const XMFLOAT3& xmf3Position)
+{
+	m_xmf3Position = xmf3Position;
+	RegenerateViewMatrix();
+}
+
+void CCamera::Rotate(float fPitchDelta, float fYawDelta)
+{
+	// ??/????? ??? (Pitch / Yaw) ???? ???.
+	m_fPitch += fPitchDelta;
+	m_fYaw += fYawDelta;
+
+	// ????? ???/????? ??? ????? ??? o?? ?????? ????? ??(89??)???? ????????.
+	const float kPitchLimit = XMConvertToRadians(89.0f);
+	if (m_fPitch > kPitchLimit) m_fPitch = kPitchLimit;
+	if (m_fPitch < -kPitchLimit) m_fPitch = -kPitchLimit;
+
+	// Yaw?? 0~2?? ?????? ??????? (???o?).
+	const float kTwoPi = XM_2PI;
+	if (m_fYaw > kTwoPi) m_fYaw -= kTwoPi;
+	if (m_fYaw < -kTwoPi) m_fYaw += kTwoPi;
+
+	RegenerateViewMatrix();
+}
+
+void CCamera::RegenerateViewMatrix()
+{
+	// Pitch/Yaw?リ??? ???ワ? look ????? ??????, ??-???? ??(0,1,0)???リ??? ??/???? ????? ??????.
+	const float cp = cosf(m_fPitch);
+	const float sp = sinf(m_fPitch);
+	const float cy = cosf(m_fYaw);
+	const float sy = sinf(m_fYaw);
+
+	// Left-Handed: +Z = forward, +X = right, +Y = up.
+	m_xmf3Look = XMFLOAT3(sy * cp, sp, cy * cp);
+
+	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	XMVECTOR vLook = XMVector3Normalize(XMLoadFloat3(&m_xmf3Look));
+	XMVECTOR vRight = XMVector3Normalize(XMVector3Cross(vWorldUp, vLook));
+	XMVECTOR vUp = XMVector3Normalize(XMVector3Cross(vLook, vRight));
+
+	XMStoreFloat3(&m_xmf3Right, vRight);
+	XMStoreFloat3(&m_xmf3Up, vUp);
+
+	XMFLOAT3 lookAt;
+	lookAt.x = m_xmf3Position.x + m_xmf3Look.x;
+	lookAt.y = m_xmf3Position.y + m_xmf3Look.y;
+	lookAt.z = m_xmf3Position.z + m_xmf3Look.z;
+
+	XMFLOAT3 upHint;
+	XMStoreFloat3(&upHint, vUp);
+	m_xmf4x4View = Matrix4x4::LookAtLH(m_xmf3Position, lookAt, upHint);
 }
 
 void CCamera::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
