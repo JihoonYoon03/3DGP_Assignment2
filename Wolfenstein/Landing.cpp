@@ -261,6 +261,7 @@ void CTextStringObject::Build(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLis
 	float fLetterPitch, XMFLOAT4 xmf4Color, bool bAnimateWithWave,
 	float fWaveAmplitude, float fWaveFrequency, float fWavePhaseOffset) {
 	SetPosition(xmf3Position);
+	m_fPixelSize = fPixelSize;
 
 	for (size_t i = 0; i < strText.length(); ++i) {
 		const auto& pattern = GetLetterPattern(strText[i]);
@@ -313,6 +314,14 @@ void CTextStringObject::UpdateBoundingBox() {
 		if (pos.y > m_xmf3BoundingMax.y) m_xmf3BoundingMax.y = pos.y;
 		if (pos.z > m_xmf3BoundingMax.z) m_xmf3BoundingMax.z = pos.z;
 	}
+
+	// CTextLetterMesh?? ????? (px, py)???? +X ?????????? LETTER_GRID_COLS * pixelSize ??? ???,
+	// -Y ?????????? LETTER_GRID_ROWS * pixelSize ??? ????? ???????.
+	// ????? ??? ??????? ??? ??????? ???? ???? ??u ??? ???? ????? ????????.
+	const float fGlyphW = m_fPixelSize * static_cast<float>(LETTER_GRID_COLS);
+	const float fGlyphH = m_fPixelSize * static_cast<float>(LETTER_GRID_ROWS);
+	m_xmf3BoundingMax.x += fGlyphW;
+	m_xmf3BoundingMin.y -= fGlyphH;
 }
 
 CButtonObject::CButtonObject() : CTextStringObject() {
@@ -323,24 +332,33 @@ CButtonObject::~CButtonObject() {
 
 XMFLOAT3 CButtonObject::UnprojectScreenToWorld(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight,
 	const XMFLOAT4X4& xmf4x4View, const XMFLOAT4X4& xmf4x4Projection) {
+	// ????? ???? z=0 ??? ??????? ?????? ??? ???????? ??????? ????? z=0 ??? ??????.
 	float fNDCX = 2.0f * nMouseX / nScreenWidth - 1.0f;
 	float fNDCY = 1.0f - 2.0f * nMouseY / nScreenHeight;
 
-	XMVECTOR vNDC = XMVectorSet(fNDCX, fNDCY, 0.0f, 1.0f);
-
 	XMMATRIX xmProj = XMLoadFloat4x4(&xmf4x4Projection);
 	XMMATRIX xmView = XMLoadFloat4x4(&xmf4x4View);
-	XMMATRIX xmInvProj = XMMatrixInverse(nullptr, xmProj);
-	XMMATRIX xmInvView = XMMatrixInverse(nullptr, xmView);
+	// inverse(view * proj) ?? ??? ????? ???? ????? ?????? ??? ????.
+	XMMATRIX xmInvViewProj = XMMatrixInverse(nullptr, XMMatrixMultiply(xmView, xmProj));
 
-	XMVECTOR vViewSpace = XMVector4Transform(vNDC, xmInvProj);
-	vViewSpace = XMVectorSetZ(vViewSpace, 1.0f);
-	vViewSpace = XMVectorSetW(vViewSpace, 1.0f);
+	// ???(z=0)?? ????(z=1) ??? ????? ???? ???????? ?????? ??-???????????? ???.
+	XMVECTOR vClipNear = XMVectorSet(fNDCX, fNDCY, 0.0f, 1.0f);
+	XMVECTOR vClipFar  = XMVectorSet(fNDCX, fNDCY, 1.0f, 1.0f);
+	XMVECTOR vWorldNear = XMVector4Transform(vClipNear, xmInvViewProj);
+	vWorldNear = XMVectorScale(vWorldNear, 1.0f / XMVectorGetW(vWorldNear));
+	XMVECTOR vWorldFar  = XMVector4Transform(vClipFar,  xmInvViewProj);
+	vWorldFar  = XMVectorScale(vWorldFar,  1.0f / XMVectorGetW(vWorldFar));
 
-	XMVECTOR vWorldSpace = XMVector4Transform(vViewSpace, xmInvView);
-
-	XMFLOAT3 xmf3Result;
-	XMStoreFloat3(&xmf3Result, vWorldSpace);
+	// ???? ????? z=0 ???? ??? ????? ?????. ??? ?????? ??? (0,0,0) ?????? ©¦?? ??? o????.
+	XMVECTOR vDir = XMVectorSubtract(vWorldFar, vWorldNear);
+	float fDirZ  = XMVectorGetZ(vDir);
+	float fNearZ = XMVectorGetZ(vWorldNear);
+	XMFLOAT3 xmf3Result{ 0.0f, 0.0f, 0.0f };
+	if (fabsf(fDirZ) > 1e-6f) {
+		float t = -fNearZ / fDirZ;
+		XMVECTOR vHit = XMVectorAdd(vWorldNear, XMVectorScale(vDir, t));
+		XMStoreFloat3(&xmf3Result, vHit);
+	}
 	return xmf3Result;
 }
 
