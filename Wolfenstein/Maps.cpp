@@ -3,6 +3,7 @@
 #include "Mesh.h"
 #include "Scene.h"
 #include <string>
+#include <random>
 
 namespace {
 	// Wolfenstein 풍 미로의 기본 단위.
@@ -88,49 +89,75 @@ namespace {
 
 	// === 맵 1 미로 격자 (13 x 13) ===
 	// 동쪽 끝의 코너 통로 (행 11)에 4단 계단과 단상이 놓인다.
-	const std::vector<std::string>& Map1Grid()
+	// 30x30 ???? ????? ?????? ??? ??(W)???? ??θ? ???????, ??? ???? ???('1')???? ??????.
+	std::vector<std::string> GenerateMaze(int rows, int cols, unsigned int seed)
 	{
-		static const std::vector<std::string> grid = {
-			"WWWWWWWWWWWWW",
-			"W...........W",
-			"W.WWWWW.WWW.W",
-			"W.....W.....W",
-			"W.WWW.WWWWW.W",
-			"W.W...W.....W",
-			"W.W.WWW.WWW.W",
-			"W...W.....W.W",
-			"WWW.W.WWW.W.W",
-			"W...W...W...W",
-			"W.WWWWW.WWW.W",
-			"W.....1234PWW",
-			"WWWWWWWWWWWWW",
-		};
+		std::vector<std::string> grid(rows, std::string(cols, 'W'));
+		std::mt19937 rng(seed);
+
+		// ??? ????? ??? ??. ????? ??? ?ε??? ????? ???? ????? DFS ??????.
+		auto inBounds = [&](int r, int c) { return r > 0 && r < rows - 1 && c > 0 && c < cols - 1; };
+
+		std::vector<std::pair<int, int>> stack;
+		const int startR = 1, startC = 1;
+		grid[startR][startC] = '.';
+		stack.emplace_back(startR, startC);
+
+		const int dirs[4][2] = { {-2, 0}, {2, 0}, {0, -2}, {0, 2} };
+
+		while (!stack.empty()) {
+			int r = stack.back().first;
+			int c = stack.back().second;
+
+			std::vector<int> options;
+			for (int i = 0; i < 4; ++i) {
+				int nr = r + dirs[i][0];
+				int nc = c + dirs[i][1];
+				if (inBounds(nr, nc) && grid[nr][nc] == 'W') options.push_back(i);
+			}
+			if (options.empty()) {
+				stack.pop_back();
+				continue;
+			}
+			int pick = options[rng() % options.size()];
+			int nr = r + dirs[pick][0];
+			int nc = c + dirs[pick][1];
+			// ??? ?? ????? ???? ??? ??????.
+			grid[r + dirs[pick][0] / 2][c + dirs[pick][1] / 2] = '.';
+			grid[nr][nc] = '.';
+			stack.emplace_back(nr, nc);
+		}
+
+		// ??? ?? ????? ???? ??????? ????? ???¸? ?????.
+		// ?????y??? ??????? ??´?.
+		const int numElevated = (rows * cols) / 35;
+		int placed = 0;
+		int safety = numElevated * 10;
+		while (placed < numElevated && safety-- > 0) {
+			int r = (rng() % (rows - 2)) + 1;
+			int c = (rng() % (cols - 2)) + 1;
+			if (grid[r][c] == '.' && !(r == startR && c == startC)) {
+				grid[r][c] = '1';
+				++placed;
+			}
+		}
+
 		return grid;
 	}
 
-	// === 맵 2 미로 격자 (15 x 13) ===
-	// 사방에서 중앙으로 모이는 십자형 통로. 남/북 두 진입로에 계단이 있고
-	// 중앙 P가 가장 높은 단상이다.
-	const std::vector<std::string>& Map2Grid()
+	// ?? 1 (30x30) - ?o? 1?? ??????? ???????.
+	const std::vector<std::string>& Map1Grid()
 	{
-		static const std::vector<std::string> grid = {
-			"WWWWWWWWWWWWWWW",
-			"WWWWWW...WWWWWW",
-			"WWWWWW...WWWWWW",
-			"WWWWWW.1.WWWWWW",
-			"WWW....2....WWW",
-			"WWW....3....WWW",
-			"WWW....P....WWW",
-			"WWW....3....WWW",
-			"WWW....2....WWW",
-			"WWWWWW.1.WWWWWW",
-			"WWWWWW...WWWWWW",
-			"WWWWWW...WWWWWW",
-			"WWWWWWWWWWWWWWW",
-		};
+		static const std::vector<std::string> grid = GenerateMaze(30, 30, 1u);
 		return grid;
 	}
-}
+
+	// ?? 2 (30x30) - ??? ?o?(2)???? ???? ????? ??????.
+	const std::vector<std::string>& Map2Grid()
+	{
+		static const std::vector<std::string> grid = GenerateMaze(30, 30, 2u);
+		return grid;
+	}}
 
 void BuildMap1Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	std::vector<std::shared_ptr<CGameObject>>& vObjects)
@@ -160,21 +187,20 @@ void BuildMap2Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dC
 
 MapInfo GetMap1Info()
 {
-	// 미로 남서쪽 코너(행 11, 열 1)에서 동쪽으로 계단 끝의 단상을 바라본다.
-	// 격자: 13 x 13, halfX = halfZ = 24
+	// 30x30 ????? (??1, ??1) ????? ???? ????? ??????? ??(+Z) ???????? ?????.
+	// halfX = halfZ = (30-1) * TILE * 0.5 = 58
 	MapInfo info;
-	info.cameraPosition = XMFLOAT3(1.0f * TILE - 24.0f, MAP_EYE_HEIGHT, 11.0f * TILE - 24.0f);   // (-20, 3.5, 20)
-	info.cameraLookAt   = XMFLOAT3(11.0f * TILE - 24.0f, MAP_EYE_HEIGHT - 0.4f, 11.0f * TILE - 24.0f); // (20, 3.1, 20)
+	info.cameraPosition = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 58.0f);
+	info.cameraLookAt   = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT - 0.2f, 3.0f * TILE - 58.0f);
 	return info;
 }
 
 MapInfo GetMap2Info()
 {
-	// 북쪽 진입로(행 1, 열 7)에서 남쪽으로 십자 중앙의 단상을 바라본다.
-	// 격자: 15 x 13, halfX = 28, halfZ = 24
+	// 30x30 ????? ????? ???? ????? ????. ??? ?o? ?????? ??? ??? ?????? ??????.
 	MapInfo info;
-	info.cameraPosition = XMFLOAT3(7.0f * TILE - 28.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 24.0f);    // (0, 3.5, -20)
-	info.cameraLookAt   = XMFLOAT3(7.0f * TILE - 28.0f, MAP_EYE_HEIGHT - 0.6f, 6.0f * TILE - 24.0f); // (0, 2.9, 0)
+	info.cameraPosition = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 58.0f);
+	info.cameraLookAt   = XMFLOAT3(3.0f * TILE - 58.0f, MAP_EYE_HEIGHT - 0.2f, 1.0f * TILE - 58.0f);
 	return info;
 }
 // ===================== ?浹 ???? =====================

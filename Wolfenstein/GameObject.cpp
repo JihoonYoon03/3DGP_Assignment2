@@ -41,6 +41,22 @@ void CGameObject::OnPrepareRender()
 
 }
 
+void CGameObject::RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, const XMFLOAT4X4& xmf4x4Parent)
+{
+	OnPrepareRender();
+
+	// (???? ??? * ?еш? ???)?? ??ии? ?????? 32-bit constants?? ??????? ???????.
+	XMMATRIX mtxLocal = XMLoadFloat4x4(&m_xmf4x4World);
+	XMMATRIX mtxParent = XMLoadFloat4x4(&xmf4x4Parent);
+	XMMATRIX mtxCombined = XMMatrixMultiply(mtxLocal, mtxParent);
+	XMFLOAT4X4 xmf4x4Transposed;
+	XMStoreFloat4x4(&xmf4x4Transposed, XMMatrixTranspose(mtxCombined));
+	pd3dCommandList->SetGraphicsRoot32BitConstants(0, 16, &xmf4x4Transposed, 0);
+
+	if (m_pShader) m_pShader->Render(pd3dCommandList, pCamera);
+	if (m_pMesh) m_pMesh->Render(pd3dCommandList);
+}
+
 void CGameObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	OnPrepareRender();

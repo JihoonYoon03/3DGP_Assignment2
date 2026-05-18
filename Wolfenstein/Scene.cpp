@@ -132,10 +132,32 @@ bool CScene::ProcessInput(UCHAR* pKeysBuffer)
 
 void CScene::AnimateObjects(float fTimeElapsed)
 {
-	// 현재 활성 씬의 오브젝트만 애니메이션한다.
+	// ???? ??u ????: ????? ??? (???o? ???¿? ?????, MAP_SELECT???? ??? ???).
+	m_fMiniatureAngle += fTimeElapsed * 0.6f; // rad/sec - oo?? ???
+
+	// ???? ??? ???? ????????? ??????????.
 	size_t idx = static_cast<size_t>(m_eCurrentState);
 	if (idx < m_vShaders.size()) {
 		m_vShaders[idx].AnimateObjects(fTimeElapsed);
+	}
+}
+
+namespace {
+	// MAP_SELECT ????? ????? ?? ???? ?ð??????? ??????? ????? ??? ??????.
+	constexpr float kMiniOffsetX = 28.0f;       // ?¿? ??????? X ???
+	constexpr float kMiniScale   = 0.18f;       // 30x30 ??(120????)?? ~21???? ????
+	constexpr float kHoverScale  = 1.18f;       // ??? ?? ??? ???
+	constexpr float kMiniTiltDeg = 45.0f;       // X?? ?? (???? ???? ??)
+
+	XMMATRIX BuildMiniatureMatrix(float xOffset, float fSpinAngle, bool bHovered)
+	{
+		const float s = kMiniScale * (bHovered ? kHoverScale : 1.0f);
+		XMMATRIX matScale     = XMMatrixScaling(s, s, s);
+		XMMATRIX matTilt      = XMMatrixRotationX(XMConvertToRadians(kMiniTiltDeg));
+		XMMATRIX matSpin      = XMMatrixRotationY(fSpinAngle);
+		XMMATRIX matTranslate = XMMatrixTranslation(xOffset, 0.0f, 0.0f);
+		// row-major: v * (S * Rx * Ry * T)
+		return XMMatrixMultiply(XMMatrixMultiply(XMMatrixMultiply(matScale, matTilt), matSpin), matTranslate);
 	}
 }
 
@@ -145,7 +167,24 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
 	pCamera->UpdateShaderVariables(pd3dCommandList);
 
-	// 현재 활성 씬만 렌더링한다.
+	if (m_eCurrentState == SceneState::MAP_SELECT) {
+		// MAP_SELECT?? ?????? ????????? ??? ???, MAP1?? MAP2?? ?????? ??????.
+		const size_t map1Idx = static_cast<size_t>(SceneState::MAP1);
+		const size_t map2Idx = static_cast<size_t>(SceneState::MAP2);
+
+		XMMATRIX mLeft  = BuildMiniatureMatrix(-kMiniOffsetX, m_fMiniatureAngle, m_nHoveredMiniIndex == 0);
+		XMMATRIX mRight = BuildMiniatureMatrix(+kMiniOffsetX, m_fMiniatureAngle, m_nHoveredMiniIndex == 1);
+
+		XMFLOAT4X4 xmf4x4Left, xmf4x4Right;
+		XMStoreFloat4x4(&xmf4x4Left,  mLeft);
+		XMStoreFloat4x4(&xmf4x4Right, mRight);
+
+		if (map1Idx < m_vShaders.size()) m_vShaders[map1Idx].RenderInParent(pd3dCommandList, pCamera, xmf4x4Left);
+		if (map2Idx < m_vShaders.size()) m_vShaders[map2Idx].RenderInParent(pd3dCommandList, pCamera, xmf4x4Right);
+		return;
+	}
+
+	// ????? ??: ???? ??? ???? ?????????.
 	size_t idx = static_cast<size_t>(m_eCurrentState);
 	if (idx < m_vShaders.size()) {
 		m_vShaders[idx].Render(pd3dCommandList, pCamera);
@@ -161,20 +200,82 @@ void CScene::ReleaseUploadBuffers()
 
 void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight, const CCamera* pCamera)
 {
-	// 시작 버튼 클릭은 랜딩 화면에서만 의미가 있다.
-	if (m_eCurrentState != SceneState::LANDING) return;
-	if (!m_pStartButton || !pCamera) return;
-	if (m_bGameStartRequested) return;
+	if (!pCamera) return;
 
-	const XMFLOAT4X4& view = pCamera->GetViewMatrix();
-	const XMFLOAT4X4& proj = pCamera->GetProjectionMatrix();
-
-	if (m_pStartButton->HitTest(nMouseX, nMouseY, nScreenWidth, nScreenHeight, view, proj))
-	{
-		m_pStartButton->SetPressed(true);
-		m_bGameStartRequested = true;
-		::OutputDebugStringA("[Landing] Game Start button clicked.\n");
+	if (m_eCurrentState == SceneState::LANDING) {
+		// ???? ??? ????? ???? ??????? ???? ???.
+		if (!m_pStartButton) return;
+		if (m_bGameStartRequested) return;
+		const XMFLOAT4X4& view = pCamera->GetViewMatrix();
+		const XMFLOAT4X4& proj = pCamera->GetProjectionMatrix();
+		if (m_pStartButton->HitTest(nMouseX, nMouseY, nScreenWidth, nScreenHeight, view, proj)) {
+			m_pStartButton->SetPressed(true);
+			m_bGameStartRequested = true;
+			::OutputDebugStringA("[Landing] Game Start button clicked.\n");
+		}
+		return;
 	}
+
+	if (m_eCurrentState == SceneState::MAP_SELECT) {
+		// ??? ???? ??????? ?????? ??? ???? ??u???.
+		UpdateMapSelectHover(nMouseX, nMouseY, nScreenWidth, nScreenHeight, pCamera);
+		if (m_nHoveredMiniIndex == 0) {
+			m_nRequestedMap = 1;
+			::OutputDebugStringA("[MapSelect] Map 1 chosen.\n");
+		}
+		else if (m_nHoveredMiniIndex == 1) {
+			m_nRequestedMap = 2;
+			::OutputDebugStringA("[MapSelect] Map 2 chosen.\n");
+		}
+		return;
+	}
+}
+
+void CScene::UpdateMapSelectHover(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight, const CCamera* pCamera)
+{
+	if (m_eCurrentState != SceneState::MAP_SELECT || !pCamera) {
+		m_nHoveredMiniIndex = -1;
+		return;
+	}
+
+	XMMATRIX matView = XMLoadFloat4x4(&pCamera->GetViewMatrix());
+	XMMATRIX matProj = XMLoadFloat4x4(&pCamera->GetProjectionMatrix());
+	XMMATRIX matVP = XMMatrixMultiply(matView, matProj);
+
+	int hover = -1;
+	float bestDist = 1e9f;
+	// ????? ????? ????? ????? ???????????? ???콺???? ????? ?????.
+	for (int i = 0; i < 2; ++i) {
+		const float xOffset = (i == 0) ? -kMiniOffsetX : +kMiniOffsetX;
+		XMMATRIX m = BuildMiniatureMatrix(xOffset, m_fMiniatureAngle, false);
+		// ???? ??? (0,0,0,1)?? m?? ??? ?? ????? ??? ????? ??.
+		XMVECTOR vCenter = XMVector3Transform(XMVectorZero(), m);
+		XMVECTOR vCenterH = XMVectorSetW(vCenter, 1.0f);
+		XMVECTOR vClip = XMVector4Transform(vCenterH, matVP);
+		float w = XMVectorGetW(vClip);
+		if (w <= 0.0f) continue;
+		float ndcX = XMVectorGetX(vClip) / w;
+		float ndcY = XMVectorGetY(vClip) / w;
+		float sx = (ndcX * 0.5f + 0.5f) * nScreenWidth;
+		float sy = (1.0f - (ndcY * 0.5f + 0.5f)) * nScreenHeight;
+		float dx = sx - nMouseX;
+		float dy = sy - nMouseY;
+		float dist = sqrtf(dx * dx + dy * dy);
+		// ?????? ????? ?????? ???. ????? ????? ~12%?? ??? ???.
+		float radius = nScreenWidth * 0.12f;
+		if (dist < radius && dist < bestDist) {
+			hover = i;
+			bestDist = dist;
+		}
+	}
+	m_nHoveredMiniIndex = hover;
+}
+
+int CScene::ConsumeSelectedMap()
+{
+	int n = m_nRequestedMap;
+	m_nRequestedMap = 0;
+	return n;
 }
 
 void CScene::TransitionToScene(SceneState newState)

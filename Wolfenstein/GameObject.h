@@ -16,6 +16,8 @@ public:
 	virtual void Animate(float fTimeElapsed);
 	virtual void OnPrepareRender();
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, class CCamera* pCamera);
+	// ?θ?(????? ????? ??) ??Ŀ? ???y? ??????? ???????. ????? ????? ???.
+	virtual void RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, class CCamera* pCamera, const XMFLOAT4X4& xmf4x4Parent);
 
 	// 상수 버퍼를 생성한다.
 	virtual void CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);

@@ -346,3 +346,12 @@ void CObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 		pObjects->Render(pd3dCommandList, pCamera);
 	}
 }
+
+void CObjectsShader::RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, const XMFLOAT4X4& xmf4x4Parent)
+{
+	CShader::Render(pd3dCommandList, pCamera);
+
+	for (auto& pObjects : m_vObjects) {
+		pObjects->RenderInParent(pd3dCommandList, pCamera, xmf4x4Parent);
+	}
+}

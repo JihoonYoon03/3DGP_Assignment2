@@ -370,8 +370,14 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 	case WM_RBUTTONUP:
 		break;
 	case WM_MOUSEMOVE:
+	{
+		int nMouseX = GET_X_LPARAM(lParam);
+		int nMouseY = GET_Y_LPARAM(lParam);
+		if (m_pScene && m_pCamera && m_pScene->GetCurrentState() == SceneState::MAP_SELECT) {
+			m_pScene->UpdateMapSelectHover(nMouseX, nMouseY, m_nWndClientWidth, m_nWndClientHeight, m_pCamera.get());
+		}
 		break;
-	default:
+	}	default:
 		break;
 	}
 }
@@ -387,20 +393,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			::PostQuitMessage(0);
 			break;
 			// Keys 1 / 2 switch freely between the two in-game maps (requirement 2).
-		case '1':
-		case VK_NUMPAD1:
-			if (m_pScene) {
-				m_pScene->TransitionToScene(SceneState::MAP1);
-				SetupGameCamera(SceneState::MAP1);
-			}
-			break;
-		case '2':
-		case VK_NUMPAD2:
-			if (m_pScene) {
-				m_pScene->TransitionToScene(SceneState::MAP2);
-				SetupGameCamera(SceneState::MAP2);
-			}
-			break;
 			// "F9" ??? ???????? ?????? ???? ??u??? ????? ????? o?????.
 		case VK_F9:
 			ChangeSwapChainState();
@@ -481,8 +473,10 @@ void CGameFramework::ProcessInput()
 	if (!m_pScene || !m_pCamera) return;
 
 	const SceneState state = m_pScene->GetCurrentState();
-	// ???? ??????? ?????/???²J-?? o???? ??????. (???²J ????? ?????? ????? o????.)
-	if (state == SceneState::LANDING) {
+	// FPS ?????(???²J-??, WASD, ????)?? MAP1/MAP2?????? ???????.
+	const bool bGameplay = (state == SceneState::MAP1 || state == SceneState::MAP2);
+	if (!bGameplay) {
+		// LANDING/MAP_SELECT: ??? ¨¨?? ???, ©§?? ????.
 		if (m_bMouseCaptured) {
 			::ShowCursor(TRUE);
 			m_bMouseCaptured = false;
@@ -490,10 +484,9 @@ void CGameFramework::ProcessInput()
 		return;
 	}
 
-	// a?? ??¨¨???? ???? ?? ???²J-???? ?????? ??? ???? ????? ???? ????? ???¢¥?.
 	const bool bForeground = (::GetForegroundWindow() == m_hWnd);
 
-	// =============== ???²J ©§?? o?? ===============
+	// =============== ???²J-?? ===============
 	if (bForeground) {
 		RECT rcClient;
 		::GetClientRect(m_hWnd, &rcClient);
@@ -501,7 +494,6 @@ void CGameFramework::ProcessInput()
 		::ClientToScreen(m_hWnd, &ptCenter);
 
 		if (!m_bMouseCaptured) {
-			// o?? ??-?? ?: ¨¨?? ????? ??-??????? ?????? ©§?? ??????? o?? ??? ??? ????? 0.
 			::ShowCursor(FALSE);
 			::SetCursorPos(ptCenter.x, ptCenter.y);
 			m_ptWndCenterScreen = ptCenter;
@@ -513,21 +505,19 @@ void CGameFramework::ProcessInput()
 			const int dx = pt.x - m_ptWndCenterScreen.x;
 			const int dy = pt.y - m_ptWndCenterScreen.y;
 			if (dx != 0 || dy != 0) {
-				// ????? ??? ??. ???? ???? ????.
 				const float kSensitivityDeg = 0.15f;
 				const float fYaw   = XMConvertToRadians(static_cast<float>(dx) * kSensitivityDeg);
 				const float fPitch = XMConvertToRadians(static_cast<float>(dy) * kSensitivityDeg);
 				m_pCamera->Rotate(fPitch, fYaw);
 				::SetCursorPos(m_ptWndCenterScreen.x, m_ptWndCenterScreen.y);
 			}
-			// ???????? ????? ??®œ ??? m_ptWndCenterScreen?? ???? ? ???? ???????.
 			m_ptWndCenterScreen = ptCenter;
 		}
 	}
 
-	// =============== WASD ??? + ??? ??? ?úô ===============
+	// =============== WASD + ??? ?úô (XZ) ===============
 	const float dt = m_GameTimer.GetTimeElapsed();
-	const float kMoveSpeed = 6.0f; // units/sec
+	const float kMoveSpeed = 6.0f;
 	const float kStep = kMoveSpeed * dt;
 
 	float fForward = 0.0f, fStrafe = 0.0f;
@@ -536,13 +526,16 @@ void CGameFramework::ProcessInput()
 	if (::GetAsyncKeyState('D') & 0x8000) fStrafe  += 1.0f;
 	if (::GetAsyncKeyState('A') & 0x8000) fStrafe  -= 1.0f;
 
+	XMFLOAT3 pos = m_pCamera->GetPosition();
+	XMFLOAT3 next = pos;
+	const float kPlayerRadius = 1.0f;
+	const float kFeetY = pos.y - MAP_EYE_HEIGHT;
+
 	if (fForward != 0.0f || fStrafe != 0.0f) {
-		// XZ ????? ??/??? ????? ????? (???? ????).
 		const XMFLOAT3 look = m_pCamera->GetLook();
 		const XMFLOAT3 right = m_pCamera->GetRight();
 		XMFLOAT3 fwdXZ{ look.x, 0.0f, look.z };
 		XMFLOAT3 rgtXZ{ right.x, 0.0f, right.z };
-		// ?????.
 		float fwdLen = sqrtf(fwdXZ.x * fwdXZ.x + fwdXZ.z * fwdXZ.z);
 		float rgtLen = sqrtf(rgtXZ.x * rgtXZ.x + rgtXZ.z * rgtXZ.z);
 		if (fwdLen > 1e-5f) { fwdXZ.x /= fwdLen; fwdXZ.z /= fwdLen; }
@@ -554,39 +547,49 @@ void CGameFramework::ProcessInput()
 			(fwdXZ.z * fForward + rgtXZ.z * fStrafe) * kStep
 		};
 
-		// ?úô?? X/Z ?????? ???? ?????? ?? ????? ????????? ???.
-		const float kPlayerRadius = 1.0f;
-		XMFLOAT3 pos = m_pCamera->GetPosition();
-		XMFLOAT3 next = pos;
-		const float kFeetY = pos.y - MAP_EYE_HEIGHT; // ???? ????? ??? ????? ???????? ??? ??? ????.
-
-		// X?? ?o?.
 		if (delta.x != 0.0f) {
 			const float probeX = next.x + delta.x + (delta.x > 0.0f ? kPlayerRadius : -kPlayerRadius);
-			if (!IsBlockedInMap(state, probeX, next.z, kFeetY)) {
-				next.x += delta.x;
-			}
+			if (!IsBlockedInMap(state, probeX, next.z, kFeetY)) next.x += delta.x;
 		}
-		// Z?? ?o? (X?? ????? ????? ???????? u???? ????????? ????).
 		if (delta.z != 0.0f) {
 			const float probeZ = next.z + delta.z + (delta.z > 0.0f ? kPlayerRadius : -kPlayerRadius);
-			if (!IsBlockedInMap(state, next.x, probeZ, kFeetY)) {
-				next.z += delta.z;
-			}
-		}
-
-		if (next.x != pos.x || next.z != pos.z) {
-			m_pCamera->SetPosition(next);
+			if (!IsBlockedInMap(state, next.x, probeZ, kFeetY)) next.z += delta.z;
 		}
 	}
 
-	// ???? (x,z) ????? ??? ????? ????? ?u? ????? ??? ??? ??(snap)???.
-	// ??? ???¥ï? ??????? ???? ????????, ?? ??? ???? ???? ??? ????? ??? ??????.
-	const XMFLOAT3 cur = m_pCamera->GetPosition();
-	const float floorY = GetFloorHeightAt(state, cur.x, cur.z);
-	const float targetY = floorY + MAP_EYE_HEIGHT;
-	if (fabsf(cur.y - targetY) > 1e-4f) {
-		m_pCamera->SetPosition(XMFLOAT3(cur.x, targetY, cur.z));
+	// =============== ???? + ??? (Y) ===============
+	// ???? ??: 3 * STEP_H (~2.1) ??? ????????. v0 = sqrt(2 * g * h).
+	const float kGravity = 30.0f;
+	const float kJumpApex = 3.0f * 0.7f; // STEP_H = 0.7
+	const float kJumpV0 = sqrtf(2.0f * kGravity * kJumpApex);
+
+	const bool bSpaceNow = (::GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+	if (bSpaceNow && !m_bPrevSpacePressed && m_bGrounded) {
+		m_fVerticalVelocity = kJumpV0;
+		m_bGrounded = false;
+	}
+	m_bPrevSpacePressed = bSpaceNow;
+
+	const float floorYAtNext = GetFloorHeightAt(state, next.x, next.z);
+	const float groundY = floorYAtNext + MAP_EYE_HEIGHT;
+
+	if (!m_bGrounded) {
+		// ???? ??: ??? ????, y ????.
+		m_fVerticalVelocity -= kGravity * dt;
+		next.y = pos.y + m_fVerticalVelocity * dt;
+		if (next.y <= groundY) {
+			next.y = groundY;
+			m_fVerticalVelocity = 0.0f;
+			m_bGrounded = true;
+		}
+	}
+	else {
+		// ???? ??? ???? ??: ??? ????? ??? ??(???? ??? ??? ??).
+		next.y = groundY;
+	}
+
+	if (next.x != pos.x || next.y != pos.y || next.z != pos.z) {
+		m_pCamera->SetPosition(next);
 	}
 }
 void CGameFramework::AnimateObjects()
@@ -594,10 +597,24 @@ void CGameFramework::AnimateObjects()
 	if (!m_pScene) return;
 	m_pScene->AnimateObjects(m_GameTimer.GetTimeElapsed());
 
-	// When the Game Start button is pressed on the landing screen, auto-transition to MAP1.
+	// ???? ????? GAME START ??? ?? ?? ???? ???(MAP_SELECT)???? ????.
 	if (m_pScene->IsGameStartRequested() && m_pScene->GetCurrentState() == SceneState::LANDING) {
-		m_pScene->TransitionToScene(SceneState::MAP1);
-		SetupGameCamera(SceneState::MAP1);
+		m_pScene->TransitionToScene(SceneState::MAP_SELECT);
+		m_pScene->ClearGameStartRequest();
+		SetupMapSelectCamera();
+	}
+
+	// ?? ???? ????? ????? ??? ?? ??u?? ?????? ??????.
+	if (m_pScene->GetCurrentState() == SceneState::MAP_SELECT) {
+		int n = m_pScene->ConsumeSelectedMap();
+		if (n == 1) {
+			m_pScene->TransitionToScene(SceneState::MAP1);
+			SetupGameCamera(SceneState::MAP1);
+		}
+		else if (n == 2) {
+			m_pScene->TransitionToScene(SceneState::MAP2);
+			SetupGameCamera(SceneState::MAP2);
+		}
 	}
 }
 
@@ -614,6 +631,24 @@ void CGameFramework::SetupGameCamera(SceneState state)
 	m_pCamera->GenerateViewMatrix(info.cameraPosition, info.cameraLookAt, XMFLOAT3(0.0f, 1.0f, 0.0f));
 	// ?? ??? ???? ???²J ©§?©§? ?????????. ???? ProcessInput ??? ??????-??????? ??? ??????.
 	m_bMouseCaptured = false;
+}
+
+void CGameFramework::SetupMapSelectCamera()
+{
+	if (!m_pCamera) return;
+	// ?? ???? ??? ????: ???? o?? ????? ???????? ?????.
+	m_pCamera->GenerateViewMatrix(
+		XMFLOAT3(0.0f, 5.0f, -55.0f),
+		XMFLOAT3(0.0f, 0.0f, 0.0f),
+		XMFLOAT3(0.0f, 1.0f, 0.0f));
+	// ???²J ©§?©§? ??????? ??? ¨¨???? ?????? (????? ???/??? ??).
+	if (m_bMouseCaptured) {
+		::ShowCursor(TRUE);
+		m_bMouseCaptured = false;
+	}
+	// ???? ???¢¬? ????.
+	m_fVerticalVelocity = 0.0f;
+	m_bGrounded = true;
 }
 
 void CGameFramework::WaitForGPUComplete()

@@ -80,6 +80,8 @@ public:
 	virtual void ReleaseUploadBuffers();
 
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera);
+	// ????? ?????? ???? ?еш? ????? ??? ????????? ???????.
+	virtual void RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, const XMFLOAT4X4& xmf4x4Parent);
 
 	void SetObjects(std::vector<std::shared_ptr<CGameObject>>&& v) { m_vObjects = std::move(v); }
 
