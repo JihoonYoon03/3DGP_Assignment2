@@ -386,13 +386,6 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 		case VK_ESCAPE:
 			::PostQuitMessage(0);
 			break;
-		case VK_RETURN:
-			// Enter on the landing screen has the same effect as clicking Start.
-			if (m_pScene && m_pScene->GetCurrentState() == SceneState::LANDING) {
-				m_pScene->TransitionToScene(SceneState::MAP1);
-				SetupGameCamera(SceneState::MAP1);
-			}
-			break;
 			// Keys 1 / 2 switch freely between the two in-game maps (requirement 2).
 		case '1':
 		case VK_NUMPAD1:
@@ -485,7 +478,107 @@ void CGameFramework::ChangeSwapChainState()
 
 void CGameFramework::ProcessInput()
 {
+	if (!m_pScene || !m_pCamera) return;
 
+	const SceneState state = m_pScene->GetCurrentState();
+	// ???? ??????? ?????/???²J-?? o???? ??????. (???²J ????? ?????? ????? o????.)
+	if (state == SceneState::LANDING) {
+		if (m_bMouseCaptured) {
+			::ShowCursor(TRUE);
+			m_bMouseCaptured = false;
+		}
+		return;
+	}
+
+	// a?? ??¨¨???? ???? ?? ???²J-???? ?????? ??? ???? ????? ???? ????? ???¢¥?.
+	const bool bForeground = (::GetForegroundWindow() == m_hWnd);
+
+	// =============== ???²J ©§?? o?? ===============
+	if (bForeground) {
+		RECT rcClient;
+		::GetClientRect(m_hWnd, &rcClient);
+		POINT ptCenter{ (rcClient.right - rcClient.left) / 2, (rcClient.bottom - rcClient.top) / 2 };
+		::ClientToScreen(m_hWnd, &ptCenter);
+
+		if (!m_bMouseCaptured) {
+			// o?? ??-?? ?: ¨¨?? ????? ??-??????? ?????? ©§?? ??????? o?? ??? ??? ????? 0.
+			::ShowCursor(FALSE);
+			::SetCursorPos(ptCenter.x, ptCenter.y);
+			m_ptWndCenterScreen = ptCenter;
+			m_bMouseCaptured = true;
+		}
+		else {
+			POINT pt;
+			::GetCursorPos(&pt);
+			const int dx = pt.x - m_ptWndCenterScreen.x;
+			const int dy = pt.y - m_ptWndCenterScreen.y;
+			if (dx != 0 || dy != 0) {
+				// ????? ??? ??. ???? ???? ????.
+				const float kSensitivityDeg = 0.15f;
+				const float fYaw   = XMConvertToRadians(static_cast<float>(dx) * kSensitivityDeg);
+				const float fPitch = XMConvertToRadians(static_cast<float>(dy) * kSensitivityDeg);
+				m_pCamera->Rotate(fPitch, fYaw);
+				::SetCursorPos(m_ptWndCenterScreen.x, m_ptWndCenterScreen.y);
+			}
+			// ???????? ????? ??®œ ??? m_ptWndCenterScreen?? ???? ? ???? ???????.
+			m_ptWndCenterScreen = ptCenter;
+		}
+	}
+
+	// =============== WASD ??? + ??? ??? ?úô ===============
+	const float dt = m_GameTimer.GetTimeElapsed();
+	const float kMoveSpeed = 6.0f; // units/sec
+	const float kStep = kMoveSpeed * dt;
+
+	float fForward = 0.0f, fStrafe = 0.0f;
+	if (::GetAsyncKeyState('W') & 0x8000) fForward += 1.0f;
+	if (::GetAsyncKeyState('S') & 0x8000) fForward -= 1.0f;
+	if (::GetAsyncKeyState('D') & 0x8000) fStrafe  += 1.0f;
+	if (::GetAsyncKeyState('A') & 0x8000) fStrafe  -= 1.0f;
+
+	if (fForward != 0.0f || fStrafe != 0.0f) {
+		// XZ ????? ??/??? ????? ????? (???? ????).
+		const XMFLOAT3 look = m_pCamera->GetLook();
+		const XMFLOAT3 right = m_pCamera->GetRight();
+		XMFLOAT3 fwdXZ{ look.x, 0.0f, look.z };
+		XMFLOAT3 rgtXZ{ right.x, 0.0f, right.z };
+		// ?????.
+		float fwdLen = sqrtf(fwdXZ.x * fwdXZ.x + fwdXZ.z * fwdXZ.z);
+		float rgtLen = sqrtf(rgtXZ.x * rgtXZ.x + rgtXZ.z * rgtXZ.z);
+		if (fwdLen > 1e-5f) { fwdXZ.x /= fwdLen; fwdXZ.z /= fwdLen; }
+		if (rgtLen > 1e-5f) { rgtXZ.x /= rgtLen; rgtXZ.z /= rgtLen; }
+
+		XMFLOAT3 delta{
+			(fwdXZ.x * fForward + rgtXZ.x * fStrafe) * kStep,
+			0.0f,
+			(fwdXZ.z * fForward + rgtXZ.z * fStrafe) * kStep
+		};
+
+		// ?úô?? X/Z ?????? ???? ?????? ?? ????? ????????? ???.
+		const float kPlayerRadius = 1.0f;
+		const float kFeetY = 0.0f; // ???? ????? EYE_Y, ????? 0???? ???? ???.
+		XMFLOAT3 pos = m_pCamera->GetPosition();
+		XMFLOAT3 next = pos;
+
+		// X?? ?o?.
+		if (delta.x != 0.0f) {
+			const float probeX = next.x + delta.x + (delta.x > 0.0f ? kPlayerRadius : -kPlayerRadius);
+			if (!IsBlockedInMap(state, probeX, next.z, kFeetY)) {
+				next.x += delta.x;
+			}
+		}
+		// Z?? ?o? (X?? ????? ????? ???????? u???? ????????? ????).
+		if (delta.z != 0.0f) {
+			const float probeZ = next.z + delta.z + (delta.z > 0.0f ? kPlayerRadius : -kPlayerRadius);
+			if (!IsBlockedInMap(state, next.x, probeZ, kFeetY)) {
+				next.z += delta.z;
+			}
+		}
+
+		if (next.x != pos.x || next.z != pos.z) {
+			m_pCamera->SetPosition(next);
+		}
+	}
 }
 
 void CGameFramework::AnimateObjects()
@@ -511,6 +604,8 @@ void CGameFramework::SetupGameCamera(SceneState state)
 	default: return; // LANDINGÀº º°µµÀÇ Ä«¸Þ¶ó¸¦ À¯ÁöÇÑ´Ù.
 	}
 	m_pCamera->GenerateViewMatrix(info.cameraPosition, info.cameraLookAt, XMFLOAT3(0.0f, 1.0f, 0.0f));
+	// ?? ??? ???? ???²J ©§?©§? ?????????. ???? ProcessInput ??? ??????-??????? ??? ??????.
+	m_bMouseCaptured = false;
 }
 
 void CGameFramework::WaitForGPUComplete()
