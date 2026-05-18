@@ -43,6 +43,9 @@ public:
 
 	void ChangeSwapChainState();
 
+	// Setup the in-game camera (called when transitioning Landing -> Map).
+	void SetupGameCamera();
+
 	void MoveToNextFrame();
 
 	std::unique_ptr<class CCamera> m_pCamera;

@@ -3,6 +3,7 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Landing.h"
+#include "Maps.h"
 
 CScene::CScene()
 {
@@ -12,7 +13,8 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 {
 	ID3D12RootSignature* pd3dGraphicsRootSignature = NULL;
 
-	// ???? ???, ??/???? ??? ????????????? ??? ???????
+	// 루트 파라미터: [0] 월드 변환 행렬 (32비트 상수 16개)
+	//                [1] 뷰/투영 행렬 (32비트 상수 32개)
 	D3D12_ROOT_PARAMETER pd3dRootParameters[2];
 	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	pd3dRootParameters[0].Constants.Num32BitValues = 16;
@@ -39,7 +41,7 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 	d3dRootSignatureDesc.NumStaticSamplers = 0;
 	d3dRootSignatureDesc.pStaticSamplers = NULL;
 	d3dRootSignatureDesc.Flags = d3dRootSignatureFlags;
-	
+
 	ID3DBlob* pd3dSignatureBlob = NULL;
 	ID3DBlob* pd3dErrorBlob = NULL;
 
@@ -48,7 +50,7 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 		D3D_ROOT_SIGNATURE_VERSION_1,
 		&pd3dSignatureBlob,
 		&pd3dErrorBlob
-	))) 
+	)))
 	{
 		pd3dDevice->CreateRootSignature(
 			0, pd3dSignatureBlob->GetBufferPointer(),
@@ -69,16 +71,35 @@ ID3D12RootSignature* CScene::GetGraphicsRootSignature()
 
 void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	// ????? ??? ?n???ĸ? ???????.
+	// 루트 시그너처 생성
 	m_pd3dGraphicsRootSignature = CreateGraphicsRootSignature(pd3dDevice);
 
-	m_vShaders.emplace_back();
-	m_vShaders.back().CreateShader(pd3dDevice, m_pd3dGraphicsRootSignature.Get());
-	m_vShaders.back().BuildObjects(pd3dDevice, pd3dCommandList);
+	// 씬 상태 개수만큼 셰이더를 만들고 파이프라인을 생성한다.
+	m_vShaders.resize(static_cast<size_t>(SceneState::COUNT));
+	for (CObjectsShader& shader : m_vShaders) {
+		shader.CreateShader(pd3dDevice, m_pd3dGraphicsRootSignature.Get());
+	}
 
-	std::vector<std::shared_ptr<CGameObject>> vLandingObjects;
-	BuildLandingObjects(pd3dDevice, pd3dCommandList, vLandingObjects, m_pStartButton);
-	m_vShaders.back().SetObjects(std::move(vLandingObjects));
+	// 랜딩 씬(시작 화면) 오브젝트 구성
+	{
+		std::vector<std::shared_ptr<CGameObject>> vLandingObjects;
+		BuildLandingObjects(pd3dDevice, pd3dCommandList, vLandingObjects, m_pStartButton);
+		m_vShaders[static_cast<size_t>(SceneState::LANDING)].SetObjects(std::move(vLandingObjects));
+	}
+
+	// 맵 1 (붉은 성채) 오브젝트 구성
+	{
+		std::vector<std::shared_ptr<CGameObject>> vMap1Objects;
+		BuildMap1Objects(pd3dDevice, pd3dCommandList, vMap1Objects);
+		m_vShaders[static_cast<size_t>(SceneState::MAP1)].SetObjects(std::move(vMap1Objects));
+	}
+
+	// 맵 2 (푸른 정찰소) 오브젝트 구성
+	{
+		std::vector<std::shared_ptr<CGameObject>> vMap2Objects;
+		BuildMap2Objects(pd3dDevice, pd3dCommandList, vMap2Objects);
+		m_vShaders[static_cast<size_t>(SceneState::MAP2)].SetObjects(std::move(vMap2Objects));
+	}
 }
 
 void CScene::ReleaseObjects()
@@ -89,7 +110,7 @@ void CScene::ReleaseObjects()
 		shader.ReleaseShaderVariables();
 		shader.ReleaseObjects();
 	}
-	
+
 	m_vShaders.clear();
 }
 
@@ -111,8 +132,10 @@ bool CScene::ProcessInput(UCHAR* pKeysBuffer)
 
 void CScene::AnimateObjects(float fTimeElapsed)
 {
-	for (CObjectsShader& shader : m_vShaders) {
-		shader.AnimateObjects(fTimeElapsed);
+	// 현재 활성 씬의 오브젝트만 애니메이션한다.
+	size_t idx = static_cast<size_t>(m_eCurrentState);
+	if (idx < m_vShaders.size()) {
+		m_vShaders[idx].AnimateObjects(fTimeElapsed);
 	}
 }
 
@@ -122,8 +145,10 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
 	pCamera->UpdateShaderVariables(pd3dCommandList);
 
-	for (CObjectsShader& shader : m_vShaders) {
-		shader.Render(pd3dCommandList, pCamera);
+	// 현재 활성 씬만 렌더링한다.
+	size_t idx = static_cast<size_t>(m_eCurrentState);
+	if (idx < m_vShaders.size()) {
+		m_vShaders[idx].Render(pd3dCommandList, pCamera);
 	}
 }
 
@@ -136,6 +161,8 @@ void CScene::ReleaseUploadBuffers()
 
 void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight, const CCamera* pCamera)
 {
+	// 시작 버튼 클릭은 랜딩 화면에서만 의미가 있다.
+	if (m_eCurrentState != SceneState::LANDING) return;
 	if (!m_pStartButton || !pCamera) return;
 	if (m_bGameStartRequested) return;
 
@@ -148,6 +175,13 @@ void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nSc
 		m_bGameStartRequested = true;
 		::OutputDebugStringA("[Landing] Game Start button clicked.\n");
 	}
+}
+
+void CScene::TransitionToScene(SceneState newState)
+{
+	if (m_eCurrentState == newState) return;
+	m_eCurrentState = newState;
+	::OutputDebugStringA("[Scene] Transitioned to new scene.\n");
 }
 
 CScene::~CScene()
