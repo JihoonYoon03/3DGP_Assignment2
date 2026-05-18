@@ -10,7 +10,6 @@ namespace {
 	constexpr float WALL_H = 8.0f;      // 천장까지 닿는 벽 높이
 	constexpr float FLOOR_H = 0.2f;     // 바닥 두께
 	constexpr float STEP_H = 0.7f;      // 계단 한 단의 높이
-	constexpr float EYE_Y = 3.5f;       // 플레이어 눈높이 (1인칭 카메라 Y)
 
 	// 한 개의 큐브 게임 오브젝트를 만들어 vector에 추가한다.
 	void AddCube(
@@ -164,8 +163,8 @@ MapInfo GetMap1Info()
 	// 미로 남서쪽 코너(행 11, 열 1)에서 동쪽으로 계단 끝의 단상을 바라본다.
 	// 격자: 13 x 13, halfX = halfZ = 24
 	MapInfo info;
-	info.cameraPosition = XMFLOAT3(1.0f * TILE - 24.0f, EYE_Y, 11.0f * TILE - 24.0f);   // (-20, 3.5, 20)
-	info.cameraLookAt   = XMFLOAT3(11.0f * TILE - 24.0f, EYE_Y - 0.4f, 11.0f * TILE - 24.0f); // (20, 3.1, 20)
+	info.cameraPosition = XMFLOAT3(1.0f * TILE - 24.0f, MAP_EYE_HEIGHT, 11.0f * TILE - 24.0f);   // (-20, 3.5, 20)
+	info.cameraLookAt   = XMFLOAT3(11.0f * TILE - 24.0f, MAP_EYE_HEIGHT - 0.4f, 11.0f * TILE - 24.0f); // (20, 3.1, 20)
 	return info;
 }
 
@@ -174,8 +173,8 @@ MapInfo GetMap2Info()
 	// 북쪽 진입로(행 1, 열 7)에서 남쪽으로 십자 중앙의 단상을 바라본다.
 	// 격자: 15 x 13, halfX = 28, halfZ = 24
 	MapInfo info;
-	info.cameraPosition = XMFLOAT3(7.0f * TILE - 28.0f, EYE_Y, 1.0f * TILE - 24.0f);    // (0, 3.5, -20)
-	info.cameraLookAt   = XMFLOAT3(7.0f * TILE - 28.0f, EYE_Y - 0.6f, 6.0f * TILE - 24.0f); // (0, 2.9, 0)
+	info.cameraPosition = XMFLOAT3(7.0f * TILE - 28.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 24.0f);    // (0, 3.5, -20)
+	info.cameraLookAt   = XMFLOAT3(7.0f * TILE - 28.0f, MAP_EYE_HEIGHT - 0.6f, 6.0f * TILE - 24.0f); // (0, 2.9, 0)
 	return info;
 }
 // ===================== ?浹 ???? =====================
@@ -221,5 +220,33 @@ bool IsBlockedInMap(SceneState state, float x, float z, float fFeetY)
 	case SceneState::MAP1: return IsBlockedInGrid(Map1Grid(), x, z, fFeetY);
 	case SceneState::MAP2: return IsBlockedInGrid(Map2Grid(), x, z, fFeetY);
 	default: return false; // ???? ??????? ?浹?? o?????? ??´?.
+	}
+}
+// (x,z)???? ??? ??? Y ????? ??????. ProcessInput?? ??????? ??? ????? ?÷???? Y?? ???????.
+namespace {
+	float GetFloorHeightInGrid(const std::vector<std::string>& grid, float x, float z)
+	{
+		const int rows = static_cast<int>(grid.size());
+		const int cols = static_cast<int>(grid[0].size());
+		const float halfX = (cols - 1) * TILE * 0.5f;
+		const float halfZ = (rows - 1) * TILE * 0.5f;
+		const int c = static_cast<int>(floorf((x + halfX) / TILE + 0.5f));
+		const int r = static_cast<int>(floorf((z + halfZ) / TILE + 0.5f));
+		if (c < 0 || c >= cols || r < 0 || r >= rows) return 0.0f;
+
+		char ch = grid[r][c];
+		if (ch >= '1' && ch <= '9') return STEP_H * static_cast<float>(ch - '0');
+		if (ch == 'P') return STEP_H * 6.0f;
+		// 'W' / '.' / ??? ?? ????.
+		return 0.0f;
+	}
+}
+
+float GetFloorHeightAt(SceneState state, float x, float z)
+{
+	switch (state) {
+	case SceneState::MAP1: return GetFloorHeightInGrid(Map1Grid(), x, z);
+	case SceneState::MAP2: return GetFloorHeightInGrid(Map2Grid(), x, z);
+	default: return 0.0f;
 	}
 }
