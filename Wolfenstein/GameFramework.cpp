@@ -517,7 +517,7 @@ void CGameFramework::ProcessInput()
 				const float kSensitivityDeg = 0.15f;
 				const float fYaw   = XMConvertToRadians(static_cast<float>(dx) * kSensitivityDeg);
 				const float fPitch = XMConvertToRadians(static_cast<float>(dy) * kSensitivityDeg);
-				m_pCamera->Rotate(fPitch, fYaw);
+				m_pCamera->Rotate(-fPitch, fYaw);
 				::SetCursorPos(m_ptWndCenterScreen.x, m_ptWndCenterScreen.y);
 			}
 			// ???????? ????? ??®œ ??? m_ptWndCenterScreen?? ???? ? ???? ???????.

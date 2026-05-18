@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash('/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe' Wolfenstein/Wolfenstein.vcxproj //p:Configuration=Debug //p:Platform=x64 //verbosity:minimal //nologo)",
+      "Bash(timeout 3 ./x64/Debug/Wolfenstein.exe)",
+      "Bash(ls -la /c/Users/wlgns/Documents/Github/3DGP_Assignment2/ | head -30)",
+      "Bash(ls -lh /c/Users/wlgns/.claude/projects/C--Users-wlgns-Documents-Github-3DGP-Assignment2--claude-worktrees-bold-babbage-a01b15/ 2>/dev/null | head -5)",
+      "PowerShell(git -C $repo push -u origin feat/landing-screen 2>&1)",
+      "PowerShell($repo = \"C:\\\\Users\\\\wlgns\\\\Documents\\\\Github\\\\3DGP_Assignment2\")",
+      "Bash(gh --version)"
+    ]
+  }
+}
