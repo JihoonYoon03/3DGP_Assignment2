@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "GameObject.h"
 
@@ -54,6 +54,25 @@ public:
 	virtual ~CPlayerShader();
 
 	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
+
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader(ID3DBlob** ppd3dShaderBlob);
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader(ID3DBlob** ppd3dShaderBlob);
+
+	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature);
+};
+
+// 화면 정중앙 고정 십자선(+) 조준점 전용 셰이더.
+// VSHud / PSHud 를 사용하며, 정점이 이미 NDC 좌표이므로 월드/뷰/투영을 무시한다.
+// 깊이 테스트 OFF + 컬링 OFF 로 화면 위 어떤 픽셀에든 항상 그려진다.
+class CHudShader : public CShader
+{
+public:
+	CHudShader();
+	virtual ~CHudShader();
+
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
+	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
 
 	virtual D3D12_SHADER_BYTECODE CreateVertexShader(ID3DBlob** ppd3dShaderBlob);
 	virtual D3D12_SHADER_BYTECODE CreatePixelShader(ID3DBlob** ppd3dShaderBlob);

@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include <windowsx.h>
 #include "GameFramework.h"
 #include "Camera.h"
@@ -341,12 +341,20 @@ void CGameFramework::BuildObjects()
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		0.4f, 0.4f, 0.4f, true, XMFLOAT4(1.0f, 0.9f, 0.2f, 1.0f));
 
+	// 화면 정중앙 고정 십자선(+) 조준점. 정점이 NDC(클립 공간) 좌표로 미리
+	// 박혀 있으므로 카메라 회전/이동에 무관하게 항상 화면 정가운데에 그려진다.
 	{
-		auto pCrosshairMesh = std::make_shared<CCubeMeshDiffused>(
+		auto pCrosshairMesh = std::make_shared<CCrosshairMesh>(
 			m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
-			0.04f, 0.04f, 0.04f, true, XMFLOAT4(1.0f, 0.2f, 0.2f, 1.0f));
+			UINT(m_nWndClientWidth), UINT(m_nWndClientHeight),
+			10u, 2u, XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
+		auto pHudShader = std::make_shared<CHudShader>();
+		if (m_pScene) {
+			pHudShader->CreateShader(m_pd3dDevice.Get(), m_pScene->GetGraphicsRootSignature());
+		}
 		m_pCrosshair = std::make_shared<CGameObject>();
 		m_pCrosshair->SetMesh(pCrosshairMesh);
+		m_pCrosshair->SetShader(pHudShader);
 	}
 
 	// Ŀ�ǵ� ����Ʈ�� �ݰ� ť�� �����Ͽ� GPU �� ��� ���ε带 �����ϰ� �Ѵ�.
@@ -677,19 +685,9 @@ void CGameFramework::ProcessInput()
 		}
 	}
 
-	// Anchor the crosshair to camera_pos + look * d. Any point on the look
-	// ray projects to the center of the screen, so a small cube placed here
-	// reads as a static reticle even as the player walks and rotates.
-	if (m_pCrosshair) {
-		const XMFLOAT3 camPos = m_pCamera->GetPosition();
-		const XMFLOAT3 look = m_pCamera->GetLook();
-		const float kCrosshairDist = 2.0f;
-		XMFLOAT3 chPos{
-			camPos.x + look.x * kCrosshairDist,
-			camPos.y + look.y * kCrosshairDist,
-			camPos.z + look.z * kCrosshairDist };
-		m_pCrosshair->SetPosition(chPos);
-	}
+	// 십자선은 NDC 정점을 그대로 사용하는 CCrosshairMesh + CHudShader 조합으로
+	// 그려지므로 별도의 위치/회전 갱신이 필요 없다. FrameAdvance 의 Render 단계에서
+	// 마지막에 한 번 호출되면 항상 화면 정중앙에 회전 없이 표시된다.
 }
 
 void CGameFramework::FireBullet()
@@ -871,9 +869,9 @@ void CGameFramework::FrameAdvance()
 	// �� ������.
 	if (m_pScene) m_pScene->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 
-	// Crosshair on top -- only during actual gameplay scenes. The active
-	// shader/PSO bound by the scene's last Render is reused, so this is just
-	// another draw with a small world transform.
+	// 십자선은 실제 플레이 씬(MAP1/MAP2)에서만 그린다.
+	// CGameObject::Render 가 CHudShader 의 PSO 로 전환한 뒤 메시를 그리므로
+	// 깊이 테스트가 꺼져 있어 항상 다른 모든 픽셀 위에 표시된다.
 	if (m_pCrosshair && m_pScene && m_pCamera) {
 		const SceneState st = m_pScene->GetCurrentState();
 		if (st == SceneState::MAP1 || st == SceneState::MAP2) {
