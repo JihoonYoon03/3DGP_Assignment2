@@ -8,13 +8,13 @@
 #include <algorithm>
 
 namespace {
-	// Wolfenstein Ç³ ¹Ì·ÎÀÇ ±âº» ´ÜÀ§.
-	constexpr float TILE = 4.0f;        // ÇÑ ¼¿ÀÇ °¡·Î/¼¼·Î Å©±â
-	constexpr float WALL_H = 8.0f;      // ÃµÀå±îÁö ´ê´Â º® ±âº» ³ôÀÌ
-	constexpr float FLOOR_H = 0.2f;     // ¹Ù´Ú µÎ²²
-	constexpr float STEP_H = 0.7f;      // °è´Ü ÇÑ ´ÜÀÇ ³ôÀÌ
+	// Wolfenstein Ç³ ï¿½Ì·ï¿½ï¿½ï¿½ ï¿½âº» ï¿½ï¿½ï¿½ï¿½.
+	constexpr float TILE = 4.0f;        // ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ Å©ï¿½ï¿½
+	constexpr float WALL_H = 8.0f;      // Ãµï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½âº» ï¿½ï¿½ï¿½ï¿½
+	constexpr float FLOOR_H = 0.2f;     // ï¿½Ù´ï¿½ ï¿½Î²ï¿½
+	constexpr float STEP_H = 0.7f;      // ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 
-	// ÇÑ °³ÀÇ Å¥ºê °ÔÀÓ ¿ÀºêÁ§Æ®¸¦ ¸¸µé¾î vector ¿¡ Ãß°¡ÇÑ´Ù.
+	// ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Å¥ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ®ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ vector ï¿½ï¿½ ï¿½ß°ï¿½ï¿½Ñ´ï¿½.
 	void AddCube(
 		ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		std::vector<std::shared_ptr<CGameObject>>& vObjects,
@@ -29,13 +29,13 @@ namespace {
 		vObjects.push_back(std::move(pObj));
 	}
 
-	// ¹®ÀÚ ±×¸®µå¸¦ ¹Þ¾Æ ¹Ì·Î Å¥ºê¸¦ ¹èÄ¡ÇÑ´Ù.
-	// ¼¿ ¹®ÀÚ ÀÇ¹Ì:
-	//   'W' : º® (³ôÀÌ´Â wallHeights ¿¡¼­ ¼¿º° ÁöÁ¤, 0 ÀÌ¸é ±âº» WALL_H)
-	//   '.' : Åë·Î (³ôÀÌ 0)
-	//   '1' ~ '9' : ÇØ´ç Ä­ À§¿¡ STEP_H * n ³ôÀÌÀÇ ´ÜÀ» µÒ
-	//   'P' : ´Ü»ó (STEP_H * 6 ³ôÀÌ)
-	// ±× ¿Ü ¹®ÀÚ´Â ¹Ù´Ú¸¸ ±ñ´Ù.
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½×¸ï¿½ï¿½å¸¦ ï¿½Þ¾ï¿½ ï¿½Ì·ï¿½ Å¥ï¿½ê¸¦ ï¿½ï¿½Ä¡ï¿½Ñ´ï¿½.
+	// ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ç¹ï¿½:
+	//   'W' : ï¿½ï¿½ (ï¿½ï¿½ï¿½Ì´ï¿½ wallHeights ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½, 0 ï¿½Ì¸ï¿½ ï¿½âº» WALL_H)
+	//   '.' : ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ 0)
+	//   '1' ~ '9' : ï¿½Ø´ï¿½ Ä­ ï¿½ï¿½ï¿½ï¿½ STEP_H * n ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½
+	//   'P' : ï¿½Ü»ï¿½ (STEP_H * 6 ï¿½ï¿½ï¿½ï¿½)
+	// ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½Ú´ï¿½ ï¿½Ù´Ú¸ï¿½ ï¿½ï¿½ï¿½.
 	void BuildMazeFromGrid(
 		ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		std::vector<std::shared_ptr<CGameObject>>& vObjects,
@@ -50,6 +50,20 @@ namespace {
 		const float halfX = (cols - 1) * TILE * 0.5f;
 		const float halfZ = (rows - 1) * TILE * 0.5f;
 
+		// Floor cells '1'..'5' encode height steps 1..5. There is no longer a
+		// separate yellow stair plate: the floor tile itself rises so its top
+		// face sits at step * STEP_H. The colorStair param is repurposed as
+		// the gradient endpoint, and colorPlatform is no longer used.
+		auto lerp4 = [](const XMFLOAT4& a, const XMFLOAT4& b, float t) {
+			XMFLOAT4 r;
+			r.x = a.x * (1.0f - t) + b.x * t;
+			r.y = a.y * (1.0f - t) + b.y * t;
+			r.z = a.z * (1.0f - t) + b.z * t;
+			r.w = 1.0f;
+			return r;
+		};
+		(void)colorPlatform;
+
 		for (int r = 0; r < rows; ++r) {
 			for (int c = 0; c < cols; ++c) {
 				char ch = grid[r][c];
@@ -57,52 +71,133 @@ namespace {
 				const float z = r * TILE - halfZ;
 				const bool parity = ((r + c) % 2 == 0);
 
-				// ¸ðµç ¼¿¿¡ ¹Ù´Ú Å¸ÀÏÀ» ±ñ´Ù (Ã¼Å©¹«´Ì).
-				const XMFLOAT4 fc = parity ? colorFloorA : colorFloorB;
-				AddCube(pd3dDevice, pd3dCommandList, vObjects,
-					XMFLOAT3(x, -FLOOR_H * 0.5f, z),
-					XMFLOAT3(TILE, FLOOR_H, TILE), fc);
-
 				if (ch == 'W') {
-					// º® ³ôÀÌ: 10Ä­ ÀÌ»óÀÇ ¿¬°á ¼ººÐÀÌ¸é ComputeWallHeights °¡ ºÎ¿©ÇÑ °ª,
-					// ±×·¸Áö ¾ÊÀ¸¸é ±âº» WALL_H ¸¦ »ç¿ëÇÑ´Ù.
+					// Wall cell. Keep a thin base tile under it so floor and
+					// wall corners stay flush at floor level 0.
+					const XMFLOAT4 fc = parity ? colorFloorA : colorFloorB;
+					AddCube(pd3dDevice, pd3dCommandList, vObjects,
+						XMFLOAT3(x, -FLOOR_H * 0.5f, z),
+						XMFLOAT3(TILE, FLOOR_H, TILE), fc);
 					const float wh = (wallHeights[r][c] > 0.0f) ? wallHeights[r][c] : WALL_H;
 					const XMFLOAT4 wc = parity ? colorWallA : colorWallB;
 					AddCube(pd3dDevice, pd3dCommandList, vObjects,
 						XMFLOAT3(x, wh * 0.5f, z),
 						XMFLOAT3(TILE, wh, TILE), wc);
+					continue;
 				}
-				else if (ch >= '1' && ch <= '9') {
-					// ¿µ¿ªº° ±ÕÀÏ ³ôÀÌ·Î ºÎ¿©µÈ º¸Çà ´Ü
-					const int step = ch - '0';
-					const float h = STEP_H * step;
-					AddCube(pd3dDevice, pd3dCommandList, vObjects,
-						XMFLOAT3(x, h * 0.5f, z),
-						XMFLOAT3(TILE, h, TILE), colorStair);
-				}
-				else if (ch == 'P') {
-					// ´Ü»ó
-					const float h = STEP_H * 6.0f;
-					AddCube(pd3dDevice, pd3dCommandList, vObjects,
-						XMFLOAT3(x, h * 0.5f, z),
-						XMFLOAT3(TILE, h, TILE), colorPlatform);
-				}
-				// ±× ¿Ü ('.') : ¹Ù´Ú¸¸À¸·Î ÃæºÐ
+
+				// Floor or stepped floor. step == 0 is the legacy '.' level.
+				int step = 0;
+				if (ch >= '1' && ch <= '5') step = ch - '0';
+
+				const float topY = step * STEP_H;
+				const float blockH = topY + FLOOR_H;
+				const float centerY = topY * 0.5f - FLOOR_H * 0.5f;
+				const XMFLOAT4 baseColor = parity ? colorFloorA : colorFloorB;
+				const float t = (step > 0) ? (0.15f + 0.15f * step) : 0.0f;
+				const XMFLOAT4 fc = (step > 0) ? lerp4(baseColor, colorStair, t) : baseColor;
+				AddCube(pd3dDevice, pd3dCommandList, vObjects,
+					XMFLOAT3(x, centerY, z),
+					XMFLOAT3(TILE, blockH, TILE), fc);
 			}
 		}
 	}
 
-	// === º¸Çà ¿µ¿ª ºÐÇÒ (¿ä±¸ A) ===
-	// ¸ðµç '.' ¼¿À» ´ÙÁß ½Ãµå BFS ·Î K °³ÀÇ ¿µ¿ªÀ¸·Î ³ª´©°í,
-	// ÀÎÁ¢ ¿µ¿ª »çÀÌÀÇ ³ôÀÌ Â÷°¡ +-1 ´Ü°è ÀÌ³»°¡ µÇµµ·Ï BFS ·Î ³ôÀÌ¸¦ ÀüÆÄÇÑ´Ù.
-	// °á°ú: ¿¬°áµÈ º¸Çà ±¸¿ª¸¶´Ù ±ÕÀÏÇÑ ³ôÀÌ¸¦ °¡Áö¸ç, ¿µ¿ª »çÀÌ´Â STEP_UP_TOLERANCE ÀÌ³»¿¡¼­
-	// Â÷ÀÌ°¡ ¹ß»ýÇÏ¹Ç·Î ÇÃ·¹ÀÌ¾î°¡ ÀÚ¿¬½º·´°Ô °É¾î´Ù´Ò ¼ö ÀÖ´Ù.
+	// === ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ä±¸ A) ===
+	// ï¿½ï¿½ï¿½ '.' ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ãµï¿½ BFS ï¿½ï¿½ K ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½,
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ +-1 ï¿½Ü°ï¿½ ï¿½Ì³ï¿½ï¿½ï¿½ ï¿½Çµï¿½ï¿½ï¿½ BFS ï¿½ï¿½ ï¿½ï¿½ï¿½Ì¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
+	// ï¿½ï¿½ï¿½: ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì´ï¿½ STEP_UP_TOLERANCE ï¿½Ì³ï¿½ï¿½ï¿½ï¿½ï¿½
+	// ï¿½ï¿½ï¿½Ì°ï¿½ ï¿½ß»ï¿½ï¿½Ï¹Ç·ï¿½ ï¿½Ã·ï¿½ï¿½Ì¾î°¡ ï¿½Ú¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½É¾ï¿½Ù´ï¿½ ï¿½ï¿½ ï¿½Ö´ï¿½.
+	// Post-DFS widening pass: visit each '.' cell and occasionally knock a
+	// neighboring wall down. This breaks the strict 1-tile corridor look.
+	// Outer ring is preserved. Spawn (1,1) and its immediate area are kept.
+	void WidenCorridors(std::vector<std::string>& grid, std::mt19937& rng)
+	{
+		const int rows = static_cast<int>(grid.size());
+		const int cols = static_cast<int>(grid[0].size());
+		const int d4[4][2] = { {-1,0},{1,0},{0,-1},{0,1} };
+
+		std::vector<std::vector<bool>> wasFloor(rows, std::vector<bool>(cols, false));
+		for (int r = 0; r < rows; ++r)
+			for (int c = 0; c < cols; ++c)
+				if (grid[r][c] == '.') wasFloor[r][c] = true;
+
+		auto nearSpawn = [&](int r, int c) {
+			return (r >= 1 && r <= 2 && c >= 1 && c <= 2);
+		};
+
+		for (int r = 1; r < rows - 1; ++r) {
+			for (int c = 1; c < cols - 1; ++c) {
+				if (!wasFloor[r][c]) continue;
+				if (nearSpawn(r, c)) continue;
+				if ((rng() % 100u) >= 25u) continue;
+				int order[4] = { 0,1,2,3 };
+				for (int i = 3; i > 0; --i) std::swap(order[i], order[rng() % static_cast<unsigned>(i + 1)]);
+				for (int k = 0; k < 4; ++k) {
+					int nr = r + d4[order[k]][0];
+					int nc = c + d4[order[k]][1];
+					if (nr <= 0 || nr >= rows - 1 || nc <= 0 || nc >= cols - 1) continue;
+					if (grid[nr][nc] != 'W') continue;
+					grid[nr][nc] = '.';
+					break;
+				}
+			}
+		}
+	}
+
+	// Plant several rectangular rooms (2x2 .. 4x4) inside the maze.
+	// Connectivity is preserved because the DFS skeleton stays intact.
+	void PlantRooms(std::vector<std::string>& grid, std::mt19937& rng)
+	{
+		const int rows = static_cast<int>(grid.size());
+		const int cols = static_cast<int>(grid[0].size());
+		const int nRooms = 6 + static_cast<int>(rng() % 5u); // 6 .. 10
+
+		std::vector<std::pair<int, int>> placed;
+		placed.reserve(nRooms);
+		const int kMinSpacing = 5;
+
+		for (int tries = 0; tries < nRooms * 6 && static_cast<int>(placed.size()) < nRooms; ++tries) {
+			const int w = 2 + static_cast<int>(rng() % 3u);
+			const int h = 2 + static_cast<int>(rng() % 3u);
+			if (rows - h - 2 <= 0 || cols - w - 2 <= 0) break;
+			const int r0 = 1 + static_cast<int>(rng() % static_cast<unsigned>(rows - h - 2));
+			const int c0 = 1 + static_cast<int>(rng() % static_cast<unsigned>(cols - w - 2));
+
+			bool tooClose = false;
+			for (size_t i = 0; i < placed.size(); ++i) {
+				int dr = placed[i].first - r0;
+				int dc = placed[i].second - c0;
+				if (dr * dr + dc * dc < kMinSpacing * kMinSpacing) { tooClose = true; break; }
+			}
+			if (tooClose) continue;
+
+			for (int r = r0; r < r0 + h; ++r)
+				for (int c = c0; c < c0 + w; ++c)
+					grid[r][c] = '.';
+			placed.emplace_back(r0, c0);
+		}
+	}
+
+	// Weighted sample for the region-to-region height delta. Most regions
+	// stay close to their neighbors (delta 0 or +-1) so the floor reads as
+	// gently varied, but a 25% chance of +-2 and 10% chance of +-3 gives
+	// occasional jumps that the player must clear with the jump key.
+	int SampleHeightDelta(std::mt19937& rng)
+	{
+		const unsigned r = rng() % 100u;
+		if (r < 30u) return 0;
+		if (r < 65u) return ((rng() & 1u) ? 1 : -1);
+		if (r < 90u) return ((rng() & 1u) ? 2 : -2);
+		return ((rng() & 1u) ? 3 : -3);
+	}
+
 	void PartitionFloorRegions(std::vector<std::string>& grid, std::mt19937& rng)
 	{
 		const int rows = static_cast<int>(grid.size());
 		const int cols = static_cast<int>(grid[0].size());
 
-		// 1. º¸Çà ¼¿ ¼öÁý (½ÃÀÛ ¼¿Àº (1,1))
+		// 1. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (1,1))
 		const int startR = 1, startC = 1;
 		std::vector<std::pair<int, int>> walkable;
 		for (int r = 0; r < rows; ++r) {
@@ -112,8 +207,11 @@ namespace {
 		}
 		if (walkable.empty()) return;
 
-		// 2. K °³ÀÇ ½Ãµå ¼±ÅÃ. ½ÃÀÛ ¼¿Àº Ç×»ó Ã¹ ½Ãµå·Î °íÁ¤.
-		const int K = (std::max)(4, static_cast<int>(walkable.size()) / 50);
+		// 2. K ï¿½ï¿½ï¿½ï¿½ ï¿½Ãµï¿½ ï¿½ï¿½ï¿½ï¿½. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½×»ï¿½ Ã¹ ï¿½Ãµï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
+		// Fewer seeds -> larger average region so the "same height runs >= 3 tiles"
+		// requirement is satisfied for the vast majority of regions, and tiny
+		// stragglers are merged below.
+		const int K = (std::max)(3, static_cast<int>(walkable.size()) / 120);
 		std::vector<std::pair<int, int>> seeds;
 		seeds.emplace_back(startR, startC);
 		std::vector<int> idx(walkable.size());
@@ -128,7 +226,7 @@ namespace {
 			seeds.push_back(p);
 		}
 
-		// 3. ´ÙÁß ¼Ò½º BFS: ¸ðµç '.' ¼¿¿¡ °¡Àå °¡±î¿î ½ÃµåÀÇ regionId ¸¦ ºÎ¿©.
+		// 3. ï¿½ï¿½ï¿½ï¿½ ï¿½Ò½ï¿½ BFS: ï¿½ï¿½ï¿½ '.' ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ãµï¿½ï¿½ï¿½ regionId ï¿½ï¿½ ï¿½Î¿ï¿½.
 		std::vector<std::vector<int>> regionId(rows, std::vector<int>(cols, -1));
 		std::queue<std::pair<int, int>> bfs;
 		for (int i = 0; i < static_cast<int>(seeds.size()); ++i) {
@@ -149,7 +247,50 @@ namespace {
 			}
 		}
 
-		// 4. ¿µ¿ª ÀÎÁ¢ ±×·¡ÇÁ ±¸¼º
+		// Merge tiny regions (< 3 cells) into their largest neighbor so every
+		// remaining region runs for at least 3 contiguous tiles. We loop until
+		// no small region remains.
+		{
+			const int K_REG_TMP = static_cast<int>(seeds.size());
+			std::vector<int> sizes(K_REG_TMP, 0);
+			auto recomputeSizes = [&]() {
+				std::fill(sizes.begin(), sizes.end(), 0);
+				for (int r = 0; r < rows; ++r)
+					for (int c = 0; c < cols; ++c)
+						if (regionId[r][c] >= 0) sizes[regionId[r][c]]++;
+			};
+			bool changed = true;
+			int guard = 0;
+			while (changed && guard++ < K_REG_TMP * 2) {
+				changed = false;
+				recomputeSizes();
+				int target = -1;
+				for (int rid = 0; rid < K_REG_TMP; ++rid) {
+					if (sizes[rid] > 0 && sizes[rid] < 3) { target = rid; break; }
+				}
+				if (target < 0) break;
+				int bestNb = -1, bestSize = -1;
+				for (int r = 0; r < rows && bestSize < (int)sizes.size(); ++r) {
+					for (int c = 0; c < cols; ++c) {
+						if (regionId[r][c] != target) continue;
+						for (int k = 0; k < 4; ++k) {
+							int nr = r + d4[k][0], nc = c + d4[k][1];
+							if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+							int oid = regionId[nr][nc];
+							if (oid < 0 || oid == target) continue;
+							if (sizes[oid] > bestSize) { bestSize = sizes[oid]; bestNb = oid; }
+						}
+					}
+				}
+				if (bestNb < 0) break;
+				for (int r = 0; r < rows; ++r)
+					for (int c = 0; c < cols; ++c)
+						if (regionId[r][c] == target) regionId[r][c] = bestNb;
+				changed = true;
+			}
+		}
+
+		// 4. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½×·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 		const int K_REG = static_cast<int>(seeds.size());
 		std::vector<std::vector<int>> adj(K_REG);
 		auto addEdge = [&](int a, int b) {
@@ -170,7 +311,7 @@ namespace {
 			}
 		}
 
-		// 5. ½ÃÀÛ ¿µ¿ª¿¡¼­ BFS ·Î ³ôÀÌ ÀüÆÄ. ÀÎÁ¢ »çÀÌ Â÷ÀÌ¸¦ -1, 0, +1 Áß ÇÏ³ª·Î Á¦ÇÑ.
+		// 5. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ BFS ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì¸ï¿½ -1, 0, +1 ï¿½ï¿½ ï¿½Ï³ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 		std::vector<int> heightStep(K_REG, -1);
 		const int startRegion = regionId[startR][startC];
 		heightStep[startRegion] = 0;
@@ -180,16 +321,19 @@ namespace {
 			int cur = hq.front(); hq.pop();
 			for (int nb : adj[cur]) {
 				if (heightStep[nb] != -1) continue;
-				int delta = static_cast<int>(rng() % 3u) - 1; // -1, 0, +1
+				// Weighted delta in [-3, +3]: mostly small differences, occasional
+				// 2- or 3-step drops that the player must clear with a jump
+				// (apex ~= 3 * STEP_H).
+				int delta = SampleHeightDelta(rng);
 				int cand = heightStep[cur] + delta;
 				if (cand < 0) cand = 0;
-				if (cand > 3) cand = 3;
+				if (cand > 5) cand = 5;
 				heightStep[nb] = cand;
 				hq.push(nb);
 			}
 		}
 
-		// 6. °á°ú¸¦ ±×¸®µå¿¡ ±â·Ï. ³ôÀÌ 0 Àº '.', 1~3 Àº '1'~'3' À¸·Î ÀúÀå.
+		// 6. ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½×¸ï¿½ï¿½å¿¡ ï¿½ï¿½ï¿½. ï¿½ï¿½ï¿½ï¿½ 0 ï¿½ï¿½ '.', 1~3 ï¿½ï¿½ '1'~'3' ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 		for (int r = 0; r < rows; ++r) {
 			for (int c = 0; c < cols; ++c) {
 				if (grid[r][c] != '.') continue;
@@ -201,9 +345,9 @@ namespace {
 		}
 	}
 
-	// === DFS ¹Ì·Î »ý¼º + ¿µ¿ª ºÐÇÒ ===
-	// 30x30 °ÝÀÚ¸¦ ¸ðµÎ º®(W)À¸·Î Ã¤¿î µÚ, DFS ·Î º¸Çà Åë·Î¸¦ ¶Õ°í,
-	// º¸Çà ¿µ¿ªµé¿¡ ±ÕÀÏÇÑ ³ôÀÌ¸¦ ºÎ¿©ÇÑ´Ù.
+	// === DFS ï¿½Ì·ï¿½ ï¿½ï¿½ï¿½ï¿½ + ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ===
+	// 30x30 ï¿½ï¿½ï¿½Ú¸ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½(W)ï¿½ï¿½ï¿½ï¿½ Ã¤ï¿½ï¿½ ï¿½ï¿½, DFS ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Î¸ï¿½ ï¿½Õ°ï¿½,
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½é¿¡ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì¸ï¿½ ï¿½Î¿ï¿½ï¿½Ñ´ï¿½.
 	std::vector<std::string> GenerateMaze(int rows, int cols, unsigned int seed)
 	{
 		std::vector<std::string> grid(rows, std::string(cols, 'W'));
@@ -235,36 +379,42 @@ namespace {
 			int pick = options[rng() % options.size()];
 			int nr = r + dirs[pick][0];
 			int nc = c + dirs[pick][1];
-			// µÎ ¼¿ »çÀÌÀÇ º®À» ¶Õ¾î Åë·Î¸¦ ¸¸µç´Ù.
+			// ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Õ¾ï¿½ ï¿½ï¿½Î¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½.
 			grid[r + dirs[pick][0] / 2][c + dirs[pick][1] / 2] = '.';
 			grid[nr][nc] = '.';
 			stack.emplace_back(nr, nc);
 		}
 
-		// ±âÁ¸ÀÇ ´ÜÀÏ ¼¿ ·£´ý ´Ü('1') »êÆ÷ ´ë½Å, ¿¬°á ¿µ¿ª ´ÜÀ§·Î ±ÕÀÏÇÑ ³ôÀÌ¸¦ ºÎ¿©ÇÑ´Ù.
+		// Break the strict 1-tile corridor look and plant a few rooms so the
+		// space reads as varied in width. PartitionFloorRegions still runs on
+		// the resulting '.' cells.
+		WidenCorridors(grid, rng);
+		PlantRooms(grid, rng);
+
+		// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½('1') ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì¸ï¿½ ï¿½Î¿ï¿½ï¿½Ñ´ï¿½.
 		PartitionFloorRegions(grid, rng);
 
 		return grid;
 	}
 
-	// ¸Ê 1 (30x30) - ½Ãµå 1 ·Î »ý¼ºµÈ ¹Ì·Î.
+	// ï¿½ï¿½ 1 (30x30) - ï¿½Ãµï¿½ 1 ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ì·ï¿½.
 	const std::vector<std::string>& Map1Grid()
 	{
 		static const std::vector<std::string> grid = GenerateMaze(30, 30, 1u);
 		return grid;
 	}
 
-	// ¸Ê 2 (30x30) - ´Ù¸¥ ½Ãµå(2) ·Î »ý¼ºµÈ µ¿ÀÏ Çü½ÄÀÇ ¹Ì·Î.
+	// ï¿½ï¿½ 2 (30x30) - ï¿½Ù¸ï¿½ ï¿½Ãµï¿½(2) ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ì·ï¿½.
 	const std::vector<std::string>& Map2Grid()
 	{
 		static const std::vector<std::string> grid = GenerateMaze(30, 30, 2u);
 		return grid;
 	}
 
-	// === º® ¿¬°á ¼ººÐº° ³ôÀÌ °è»ê (¿ä±¸ B) ===
-	// 'W' ¼¿µéÀ» 4¹æÇâ ÀÎÁ¢À¸·Î ÇÃ·¯µåÇÊ ÇÏ¿© ¿¬°á ¼ººÐÀ» Ã£°í,
-	// ¼ººÐ Å©±â°¡ 10 ¼¿ ÀÌ»óÀÌ¸é ±× ¼ººÐ ÀüÃ¼¿¡ ´ÜÀÏ ³ôÀÌ¸¦ ºÎ¿©ÇÑ´Ù.
-	// 10 ¹Ì¸¸ÀÇ ÂªÀº º® Á¶°¢Àº 0.0f ¸¦ ³²°Ü BuildMazeFromGrid °¡ ±âº» WALL_H ¸¦ »ç¿ëÇÏµµ·Ï ÇÑ´Ù.
+	// === ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ðºï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ (ï¿½ä±¸ B) ===
+	// 'W' ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 4ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ã·ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ï¿ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Ã£ï¿½ï¿½,
+	// ï¿½ï¿½ï¿½ï¿½ Å©ï¿½â°¡ 10 ï¿½ï¿½ ï¿½Ì»ï¿½ï¿½Ì¸ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ì¸ï¿½ ï¿½Î¿ï¿½ï¿½Ñ´ï¿½.
+	// 10 ï¿½Ì¸ï¿½ï¿½ï¿½ Âªï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 0.0f ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ BuildMazeFromGrid ï¿½ï¿½ ï¿½âº» WALL_H ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ïµï¿½ï¿½ï¿½ ï¿½Ñ´ï¿½.
 	std::vector<std::vector<float>> ComputeWallHeights(const std::vector<std::string>& grid, unsigned int seed)
 	{
 		const int rows = static_cast<int>(grid.size());
@@ -294,13 +444,13 @@ namespace {
 					}
 				}
 				if (static_cast<int>(comp.size()) >= 10) {
-					// 8.0, 9.4, 10.8, 12.2 Áß ÇÏ³ª·Î ¼ººÐ ÀüÃ¼¸¦ °í¸¥´Ù.
+					// 8.0, 9.4, 10.8, 12.2 ï¿½ï¿½ ï¿½Ï³ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
 					const float h = WALL_H + static_cast<float>(rng() % 4u) * STEP_H * 2.0f;
 					for (size_t i = 0; i < comp.size(); ++i) {
 						out[comp[i].first][comp[i].second] = h;
 					}
 				}
-				// 10 ¹Ì¸¸ÀÌ¸é out Àº 0 ±×´ë·Î -> ±âº» WALL_H »ç¿ë
+				// 10 ï¿½Ì¸ï¿½ï¿½Ì¸ï¿½ out ï¿½ï¿½ 0 ï¿½×´ï¿½ï¿½ -> ï¿½âº» WALL_H ï¿½ï¿½ï¿½
 			}
 		}
 		return out;
@@ -310,36 +460,36 @@ namespace {
 void BuildMap1Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	std::vector<std::shared_ptr<CGameObject>>& vObjects)
 {
-	// Â÷°¡¿î È¸Ã»»ö µ¹ ¹Ì·Î. ¾îµÎ¿î ¹Ù´Ú°ú Çª¸£½º¸§ÇÑ ¼®Àç º®.
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ È¸Ã»ï¿½ï¿½ ï¿½ï¿½ ï¿½Ì·ï¿½. ï¿½ï¿½Î¿ï¿½ ï¿½Ù´Ú°ï¿½ Çªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½.
 	const auto& grid = Map1Grid();
 	const auto wallH = ComputeWallHeights(grid, 1u);
 	BuildMazeFromGrid(pd3dDevice, pd3dCommandList, vObjects, grid, wallH,
-		XMFLOAT4(0.10f, 0.10f, 0.14f, 1.0f),  // floor A : ¾îµÎ¿î ½½·¹ÀÌÆ®
-		XMFLOAT4(0.14f, 0.14f, 0.20f, 1.0f),  // floor B : ¾à°£ ¹àÀº ½½·¹ÀÌÆ®
-		XMFLOAT4(0.42f, 0.46f, 0.56f, 1.0f),  // wall A  : È¸Ã»»ö ¼®Àç
-		XMFLOAT4(0.32f, 0.36f, 0.46f, 1.0f),  // wall B  : ¾îµÎ¿î ¼®Àç (Ã¼Å© ±³Â÷)
-		XMFLOAT4(0.68f, 0.55f, 0.32f, 1.0f),  // stair   : »ç¾Ï »ö
-		XMFLOAT4(0.92f, 0.82f, 0.42f, 1.0f)); // platform: ±Ýºû °­Á¶
+		XMFLOAT4(0.10f, 0.10f, 0.14f, 1.0f),  // floor A : ï¿½ï¿½Î¿ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ®
+		XMFLOAT4(0.14f, 0.14f, 0.20f, 1.0f),  // floor B : ï¿½à°£ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ®
+		XMFLOAT4(0.42f, 0.46f, 0.56f, 1.0f),  // wall A  : È¸Ã»ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+		XMFLOAT4(0.32f, 0.36f, 0.46f, 1.0f),  // wall B  : ï¿½ï¿½Î¿ï¿½ ï¿½ï¿½ï¿½ï¿½ (Ã¼Å© ï¿½ï¿½ï¿½ï¿½)
+		XMFLOAT4(0.68f, 0.55f, 0.32f, 1.0f),  // stair   : ï¿½ï¿½ï¿½ ï¿½ï¿½
+		XMFLOAT4(0.92f, 0.82f, 0.42f, 1.0f)); // platform: ï¿½Ýºï¿½ ï¿½ï¿½ï¿½ï¿½
 }
 
 void BuildMap2Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	std::vector<std::shared_ptr<CGameObject>>& vObjects)
 {
-	// µû¶æÇÑ °¥»ö º®µ¹ ´øÀü. È¶ºÒ¿¡ ºñÄ£ µíÇÑ »ö°¨.
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½. È¶ï¿½Ò¿ï¿½ ï¿½ï¿½Ä£ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 	const auto& grid = Map2Grid();
 	const auto wallH = ComputeWallHeights(grid, 2u);
 	BuildMazeFromGrid(pd3dDevice, pd3dCommandList, vObjects, grid, wallH,
-		XMFLOAT4(0.18f, 0.12f, 0.07f, 1.0f),  // floor A : Â£Àº Èë»ö
-		XMFLOAT4(0.26f, 0.18f, 0.10f, 1.0f),  // floor B : ¾à°£ ¹àÀº Èë»ö
-		XMFLOAT4(0.55f, 0.32f, 0.18f, 1.0f),  // wall A  : Àûº®µ¹
-		XMFLOAT4(0.42f, 0.24f, 0.14f, 1.0f),  // wall B  : ¾îµÎ¿î º®µ¹
-		XMFLOAT4(0.78f, 0.50f, 0.22f, 1.0f),  // stair   : µû¶æÇÑ ¿À·»Áö
-		XMFLOAT4(1.00f, 0.78f, 0.32f, 1.0f)); // platform: È¶ºÒ ³ë¶û
+		XMFLOAT4(0.18f, 0.12f, 0.07f, 1.0f),  // floor A : Â£ï¿½ï¿½ ï¿½ï¿½ï¿½
+		XMFLOAT4(0.26f, 0.18f, 0.10f, 1.0f),  // floor B : ï¿½à°£ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
+		XMFLOAT4(0.55f, 0.32f, 0.18f, 1.0f),  // wall A  : ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+		XMFLOAT4(0.42f, 0.24f, 0.14f, 1.0f),  // wall B  : ï¿½ï¿½Î¿ï¿½ ï¿½ï¿½ï¿½ï¿½
+		XMFLOAT4(0.78f, 0.50f, 0.22f, 1.0f),  // stair   : ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+		XMFLOAT4(1.00f, 0.78f, 0.32f, 1.0f)); // platform: È¶ï¿½ï¿½ ï¿½ï¿½ï¿½
 }
 
 MapInfo GetMap1Info()
 {
-	// 30x30 ¹Ì·ÎÀÇ (¿­1, Çà1) ½ÃÀÛ À§Ä¡¿¡¼­ Á¤¸é(+Z) ¹æÇâÀ» ¹Ù¶óº»´Ù.
+	// 30x30 ï¿½Ì·ï¿½ï¿½ï¿½ (ï¿½ï¿½1, ï¿½ï¿½1) ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½(+Z) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ù¶óº»´ï¿½.
 	// halfX = halfZ = (30-1) * TILE * 0.5 = 58
 	MapInfo info;
 	info.cameraPosition = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 58.0f);
@@ -349,18 +499,18 @@ MapInfo GetMap1Info()
 
 MapInfo GetMap2Info()
 {
-	// 30x30 ¹Ì·ÎÀÇ ½ÃÀÛ À§Ä¡¿¡¼­ µ¿ÂÊ(+X)À» º»´Ù. ´Ù¸¥ ½Ãµå·Î ¸¸µé¾îÁø ¹Ì·ÎÁö¸¸ µ¿ÀÏÇÑ ÁÂÇ¥ Ã¼°è.
+	// 30x30 ï¿½Ì·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½(+X)ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½. ï¿½Ù¸ï¿½ ï¿½Ãµï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ì·ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ç¥ Ã¼ï¿½ï¿½.
 	MapInfo info;
 	info.cameraPosition = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 58.0f);
 	info.cameraLookAt   = XMFLOAT3(3.0f * TILE - 58.0f, MAP_EYE_HEIGHT - 0.2f, 1.0f * TILE - 58.0f);
 	return info;
 }
-// ===================== Ãæµ¹ Ã³¸® =====================
-// ÇÃ·¹ÀÌ¾î ¹ß ³ôÀÌ(fFeetY) ¸¦ ±â¹ÝÀ¸·Î (x,z) ¿¡¼­ ÀÌµ¿ÀÌ ¸·È÷´ÂÁö ÆÇÁ¤ÇÑ´Ù.
-// W : Ç×»ó ¸·Èû.
-// 1~9 / P : ´ÜÀÇ À­¸éÀÌ fFeetY + STEP_UP_TOLERANCE º¸´Ù ³ôÀ¸¸é ¸·Èû.
-// '.' : Ç×»ó Åë°ú.
-// °ÝÀÚ ¹Ù±ùÀº ¸ðµÎ ¸·Èû.
+// ===================== ï¿½æµ¹ Ã³ï¿½ï¿½ =====================
+// ï¿½Ã·ï¿½ï¿½Ì¾ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½(fFeetY) ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (x,z) ï¿½ï¿½ï¿½ï¿½ ï¿½Ìµï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
+// W : ï¿½×»ï¿½ ï¿½ï¿½ï¿½ï¿½.
+// 1~9 / P : ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ fFeetY + STEP_UP_TOLERANCE ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
+// '.' : ï¿½×»ï¿½ ï¿½ï¿½ï¿½.
+// ï¿½ï¿½ï¿½ï¿½ ï¿½Ù±ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 namespace {
 	constexpr float STEP_UP_TOLERANCE = STEP_H + 0.05f;
 
@@ -371,24 +521,20 @@ namespace {
 		const float halfX = (cols - 1) * TILE * 0.5f;
 		const float halfZ = (rows - 1) * TILE * 0.5f;
 
-		// (x,z) -> (c,r) º¯È¯. ¼¿ Áß¾ÓÀ» ±âÁØÀ¸·Î 0.5f ¿ÀÇÁ¼Â Àû¿ë.
+		// (x,z) -> (c,r) ï¿½ï¿½È¯. ï¿½ï¿½ ï¿½ß¾ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 0.5f ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.
 		const int c = static_cast<int>(floorf((x + halfX) / TILE + 0.5f));
 		const int r = static_cast<int>(floorf((z + halfZ) / TILE + 0.5f));
 
-		// °ÝÀÚ ¹Ù±ùÀº ¸·ÈûÀ¸·Î Ã³¸®.
+		// ï¿½ï¿½ï¿½ï¿½ ï¿½Ù±ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Ã³ï¿½ï¿½.
 		if (c < 0 || c >= cols || r < 0 || r >= rows) return true;
 
 		char ch = grid[r][c];
 		if (ch == 'W') return true;
-		if (ch >= '1' && ch <= '9') {
+		if (ch >= '1' && ch <= '5') {
 			const float topY = STEP_H * (ch - '0');
 			return (topY > fFeetY + STEP_UP_TOLERANCE);
 		}
-		if (ch == 'P') {
-			const float topY = STEP_H * 6.0f;
-			return (topY > fFeetY + STEP_UP_TOLERANCE);
-		}
-		return false; // '.' ´Â Åë°ú
+		return false; // '.' ï¿½ï¿½ ï¿½ï¿½ï¿½
 	}
 }
 
@@ -401,7 +547,7 @@ bool IsBlockedInMap(SceneState state, float x, float z, float fFeetY)
 	}
 }
 
-// (x,z) ¿¡¼­ ¹ßÀÌ ´êÀ» Y ÁÂÇ¥¸¦ ¹ÝÈ¯. ProcessInput ¿¡¼­ Áß·Â Ã³¸®¿Í Ä«¸Þ¶ó Y º¸Á¤¿¡ »ç¿ëÇÑ´Ù.
+// (x,z) ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Y ï¿½ï¿½Ç¥ï¿½ï¿½ ï¿½ï¿½È¯. ProcessInput ï¿½ï¿½ï¿½ï¿½ ï¿½ß·ï¿½ Ã³ï¿½ï¿½ï¿½ï¿½ Ä«ï¿½Þ¶ï¿½ Y ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
 namespace {
 	float GetFloorHeightInGrid(const std::vector<std::string>& grid, float x, float z)
 	{
@@ -414,8 +560,7 @@ namespace {
 		if (c < 0 || c >= cols || r < 0 || r >= rows) return 0.0f;
 
 		char ch = grid[r][c];
-		if (ch >= '1' && ch <= '9') return STEP_H * static_cast<float>(ch - '0');
-		if (ch == 'P') return STEP_H * 6.0f;
+		if (ch >= '1' && ch <= '5') return STEP_H * static_cast<float>(ch - '0');
 		return 0.0f;
 	}
 }
@@ -427,4 +572,27 @@ float GetFloorHeightAt(SceneState state, float x, float z)
 	case SceneState::MAP2: return GetFloorHeightInGrid(Map2Grid(), x, z);
 	default: return 0.0f;
 	}
+}
+
+float ClampDistanceAgainstWalls(SceneState state,
+	XMFLOAT3 fromXZ, XMFLOAT3 dirXZ, float maxDist, float eyeY)
+{
+	if (state != SceneState::MAP1 && state != SceneState::MAP2) return maxDist;
+
+	const float dirLen = sqrtf(dirXZ.x * dirXZ.x + dirXZ.z * dirXZ.z);
+	if (dirLen < 1e-5f) return 0.0f;
+	const float invLen = 1.0f / dirLen;
+	const XMFLOAT3 dn{ dirXZ.x * invLen, 0.0f, dirXZ.z * invLen };
+
+	const float kStep = TILE * 0.25f;
+	const float kInset = 0.4f;
+	for (float d = kStep; d <= maxDist; d += kStep) {
+		const float sx = fromXZ.x + dn.x * d;
+		const float sz = fromXZ.z + dn.z * d;
+		if (IsBlockedInMap(state, sx, sz, eyeY)) {
+			const float r = d - kInset;
+			return (r < 0.0f) ? 0.0f : r;
+		}
+	}
+	return maxDist;
 }
