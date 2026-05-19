@@ -27,7 +27,7 @@ void CGameObject::SetMesh(std::shared_ptr<CMesh> pMesh)
 
 void CGameObject::ReleaseUploadBuffers()
 {
-	// 정점 버퍼를 위한 업로드 버퍼를 소멸시킨다. 
+	// 정점 버퍼를 위한 업로드 버퍼를 소멸시킨다.
 	if (m_pMesh) m_pMesh->ReleaseUploadBuffers();
 }
 
@@ -45,7 +45,7 @@ void CGameObject::RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, CCa
 {
 	OnPrepareRender();
 
-	// (???? ??? * ?θ? ???)?? ??Ŀ? ?????? 32-bit constants?? ??????? ???????.
+	// (로컬 행렬 * 부모 행렬) 을 전치해 32-bit constants 슬롯 0 에 업로드한다.
 	XMMATRIX mtxLocal = XMLoadFloat4x4(&m_xmf4x4World);
 	XMMATRIX mtxParent = XMLoadFloat4x4(&xmf4x4Parent);
 	XMMATRIX mtxCombined = XMMatrixMultiply(mtxLocal, mtxParent);
@@ -60,14 +60,14 @@ void CGameObject::RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, CCa
 void CGameObject::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
 {
 	OnPrepareRender();
-	
+
 	// 객체의 정보를 셰이더 변수(cBuffer)로 복사한다.
 	UpdateShaderVariables(pd3dCommandList);
 
 	// 게임 객체의 월드 변환 행렬을 셰이더의 상수 버퍼로 전달(복사)한다.
 	if (m_pShader) m_pShader->Render(pd3dCommandList, pCamera);
 
-	// 게임 객체에 메쉬가 연결되어 있으면 메쉬를 렌더링한다. 
+	// 게임 객체에 메쉬가 연결되어 있으면 메쉬를 렌더링한다.
 	if (m_pMesh) m_pMesh->Render(pd3dCommandList);
 }
 
@@ -79,7 +79,7 @@ void CGameObject::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandLi
 {
 	XMFLOAT4X4 xmf4x4World;
 	XMStoreFloat4x4(&xmf4x4World, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4World)));
-	// 객체의 월드 변환 행렬을 루트 상수를 통해 셰이더 버퍼(cBuffer)로 복사한다
+	// 객체의 월드 변환 행렬을 루트 상수를 통해 셰이더 버퍼(cBuffer)로 복사한다.
 	pd3dCommandList->SetGraphicsRoot32BitConstants(0, 16, &xmf4x4World, 0);
 }
 
