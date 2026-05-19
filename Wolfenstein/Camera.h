@@ -9,30 +9,30 @@ struct VS_CB_CAMERA_INFO
 	XMFLOAT4X4 m_xmf4x4Projection;
 };
 
-// Ä«¸Þ¶ó ½ÃÁ¡ ¸ðµå. FPS = 1ÀÎÄª(´« À§Ä¡ = ÇÃ·¹ÀÌ¾î À§Ä¡), TPS = 3ÀÎÄª(ÇÃ·¹ÀÌ¾î µÚ·Î ºüÁø À§Ä¡).
-// À§Ä¡ °è»êÀº CGameFramework::ProcessInput ¿¡¼­ ¸ðµå¿¡ µû¶ó ºÐ±âÇÑ´Ù.
+// Ä«ï¿½Þ¶ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½. FPS = 1ï¿½ï¿½Äª(ï¿½ï¿½ ï¿½ï¿½Ä¡ = ï¿½Ã·ï¿½ï¿½Ì¾ï¿½ ï¿½ï¿½Ä¡), TPS = 3ï¿½ï¿½Äª(ï¿½Ã·ï¿½ï¿½Ì¾ï¿½ ï¿½Ú·ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡).
+// ï¿½ï¿½Ä¡ ï¿½ï¿½ï¿½ï¿½ï¿½ CGameFramework::ProcessInput ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½å¿¡ ï¿½ï¿½ï¿½ï¿½ ï¿½Ð±ï¿½ï¿½Ñ´ï¿½.
 enum class ECameraMode { FPS, TPS };
 
 class CCamera {
 protected:
-	// ºä Çà·Ä
+	// ï¿½ï¿½ ï¿½ï¿½ï¿½
 	XMFLOAT4X4		m_xmf4x4View;
-	// Åõ¿µ Çà·Ä
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
 	XMFLOAT4X4		m_xmf4x4Projection;
 
 	D3D12_VIEWPORT	m_d3dViewport;
 	D3D12_RECT		m_d3dScissorRect;
 
-	// Ä«¸Þ¶óÀÇ À§Ä¡¿Í Á¤ÇÕµÈ ¹æÇâ º¤ÅÍµé.
+	// Ä«ï¿½Þ¶ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡ï¿½ï¿½ ï¿½ï¿½ï¿½Õµï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Íµï¿½.
 	XMFLOAT3	m_xmf3Position{ 0.0f, 0.0f, 0.0f };
 	XMFLOAT3	m_xmf3Right{ 1.0f, 0.0f, 0.0f };
 	XMFLOAT3	m_xmf3Up{ 0.0f, 1.0f, 0.0f };
 	XMFLOAT3	m_xmf3Look{ 0.0f, 0.0f, 1.0f };
-	// Pitch / Yaw (¶óµð¾È)
+	// Pitch / Yaw (ï¿½ï¿½ï¿½ï¿½)
 	float		m_fPitch = 0.0f;
 	float		m_fYaw = 0.0f;
 
-	// ÇöÀç ½ÃÁ¡ ¸ðµå. ±âº»Àº FPS.
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½. ï¿½âº»ï¿½ï¿½ FPS.
 	ECameraMode	m_eMode = ECameraMode::FPS;
 
 public:
@@ -45,7 +45,7 @@ public:
 
 	void GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up);
 
-	// 1ÀÎÄª ÀÌµ¿ / È¸Àü API.
+	// 1ï¿½ï¿½Äª ï¿½Ìµï¿½ / È¸ï¿½ï¿½ API.
 	void Move(const XMFLOAT3& xmf3Shift);
 	void SetPosition(const XMFLOAT3& xmf3Position);
 	void Rotate(float fPitchDelta, float fYawDelta);
@@ -54,6 +54,9 @@ public:
 	const XMFLOAT3& GetPosition() const { return m_xmf3Position; }
 	const XMFLOAT3& GetLook() const { return m_xmf3Look; }
 	const XMFLOAT3& GetRight() const { return m_xmf3Right; }
+	// Returns the camera yaw used by the TPS path to keep the player model
+	// rotation in sync with the view direction.
+	float GetYaw() const { return m_fYaw; }
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
 
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ =	0.0f, float fMaxZ = 1.0f);
@@ -64,7 +67,7 @@ public:
 	const XMFLOAT4X4& GetViewMatrix() const { return m_xmf4x4View; }
 	const XMFLOAT4X4& GetProjectionMatrix() const { return m_xmf4x4Projection; }
 
-	// ½ÃÁ¡ ¸ðµå Åä±Û¿ë Á¢±ÙÀÚ.
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½Û¿ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.
 	ECameraMode GetMode() const { return m_eMode; }
 	void SetMode(ECameraMode eMode) { m_eMode = eMode; }
 };

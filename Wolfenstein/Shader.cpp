@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "Shader.h"
 #include "Camera.h"
+#include <algorithm>
 
 CShader::CShader()
 {
@@ -12,7 +13,7 @@ CShader::~CShader()
 	m_vd3dPipelineStates.clear();
 }
 
-// ·¡½ºÅÍ¶óÀÌÀú »óÅÂ¸¦ ¼³Á¤ÇÏ±â À§ÇÑ ±¸Á¶Ã¼¸¦ ¹ÝÈ¯ÇÑ´Ù.
+// ï¿½ï¿½ï¿½ï¿½ï¿½Í¶ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Â¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½È¯ï¿½Ñ´ï¿½.
 D3D12_RASTERIZER_DESC CShader::CreateRasterizerState()
 {
 	D3D12_RASTERIZER_DESC d3dRasterizerDesc;
@@ -32,7 +33,7 @@ D3D12_RASTERIZER_DESC CShader::CreateRasterizerState()
 	return d3dRasterizerDesc;
 }
 
-// ±íÀÌ-½ºÅÙ½Ç °Ë»ç¸¦ À§ÇÑ »óÅÂ¸¦ ¼³Á¤ÇÏ±â À§ÇÑ ±¸Á¶Ã¼¸¦ ¹ÝÈ¯ÇÑ´Ù.
+// ï¿½ï¿½ï¿½ï¿½-ï¿½ï¿½ï¿½Ù½ï¿½ ï¿½Ë»ç¸¦ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Â¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½È¯ï¿½Ñ´ï¿½.
 D3D12_DEPTH_STENCIL_DESC CShader::CreateDepthStencilState()
 {
 	D3D12_DEPTH_STENCIL_DESC d3dDepthStencilDesc;
@@ -55,7 +56,7 @@ D3D12_DEPTH_STENCIL_DESC CShader::CreateDepthStencilState()
 	return d3dDepthStencilDesc;
 }
 
-// ºí·»µù »óÅÂ¸¦ ¼³Á¤ÇÏ±â À§ÇÑ ±¸Á¶Ã¼¸¦ ¹ÝÈ¯ÇÑ´Ù.
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Â¸ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½È¯ï¿½Ñ´ï¿½.
 D3D12_BLEND_DESC CShader::CreateBlendState()
 {
 	D3D12_BLEND_DESC d3dBlendDesc;
@@ -76,7 +77,7 @@ D3D12_BLEND_DESC CShader::CreateBlendState()
 	return d3dBlendDesc;
 }
 
-// ÀÔ·Â Á¶¸³±â¿¡°Ô Á¤Á¡ ¹öÆÛÀÇ ±¸Á¶¸¦ ¾Ë·ÁÁÖ±â À§ÇÑ ±¸Á¶Ã¼¸¦ ¹ÝÈ¯ÇÑ´Ù.
+// ï¿½Ô·ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½â¿¡ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ë·ï¿½ï¿½Ö±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½È¯ï¿½Ñ´ï¿½.
 D3D12_INPUT_LAYOUT_DESC CShader::CreateInputLayout()
 {
 	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
@@ -104,7 +105,7 @@ D3D12_SHADER_BYTECODE CShader::CreatePixelShader(ID3DBlob** ppd3dShaderBlob)
 	return (d3dShaderByteCode);
 }
 
-// ¼ÎÀÌ´õ ¼Ò½º ÄÚµå¸¦ ÄÄÆÄÀÏÇÏ¿© ¹ÙÀÌÆ® ÄÚµå ±¸Á¶Ã¼¸¦ ¹ÝÈ¯ÇÑ´Ù.
+// ï¿½ï¿½ï¿½Ì´ï¿½ ï¿½Ò½ï¿½ ï¿½Úµå¸¦ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¿ï¿½ ï¿½ï¿½ï¿½ï¿½Æ® ï¿½Úµï¿½ ï¿½ï¿½ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½È¯ï¿½Ñ´ï¿½.
 D3D12_SHADER_BYTECODE CShader::CompileShaderFromFile(const WCHAR* pszFileName, LPCSTR pszShaderName,
 	LPCSTR pszShaderProfile, ID3DBlob** ppd3dShaderBlob)
 {
@@ -127,7 +128,7 @@ D3D12_SHADER_BYTECODE CShader::CompileShaderFromFile(const WCHAR* pszFileName, L
 	return d3dShaderByteCode;
 }
 
-// ±×·¡ÇÈ½º ÆÄÀÌÇÁ¶óÀÎ »óÅÂ °´Ã¼¸¦ »ý¼ºÇÑ´Ù.
+// ï¿½×·ï¿½ï¿½È½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
 void CShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature)
 {
 	ID3DBlob* pd3dVertexShaderBlob = NULL;
@@ -186,7 +187,7 @@ void CShader::ReleaseShaderVariables()
 
 void CShader::OnPrepareRender(ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	// ÆÄÀÌÇÁ¶óÀÎ¿¡ ±×·¡ÇÈ½º »óÅÂ °´Ã¼¸¦ ¼³Á¤ÇÑ´Ù.
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¿ï¿½ ï¿½×·ï¿½ï¿½È½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
 	pd3dCommandList->SetPipelineState(m_vd3dPipelineStates[0].Get());
 }
 void CShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera)
@@ -248,16 +249,16 @@ CObjectsShader::~CObjectsShader()
 void CObjectsShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	* pd3dCommandList)
 {
-	//°¡·Îx¼¼·Îx³ôÀÌ°¡ 12x12x12ÀÎ Á¤À°¸éÃ¼ ¸Þ½¬¸¦ »ý¼ºÇÑ´Ù. 
+	//ï¿½ï¿½ï¿½ï¿½xï¿½ï¿½ï¿½ï¿½xï¿½ï¿½ï¿½Ì°ï¿½ 12x12x12ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¼ ï¿½Þ½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½. 
 	std::shared_ptr<CCubeMeshDiffused> pCubeMesh =
 		std::make_shared<CCubeMeshDiffused>(pd3dDevice, pd3dCommandList, 12.0f, 12.0f, 12.0f);
 
-	/* x-Ãà, y-Ãà, z-Ãà ¾çÀÇ ¹æÇâÀÇ °´Ã¼ °³¼öÀÌ´Ù.
-	°¢ °ªÀ» 1¾¿ ´Ã¸®°Å³ª ÁÙÀÌ¸é¼­ ½ÇÇàÇÒ ¶§ ÇÁ·¹ÀÓ ·¹ÀÌÆ®°¡ ¾î¶»°Ô
-	º¯ÇÏ´Â °¡¸¦ »ìÆìº¸±â ¹Ù¶õ´Ù.*/
+	/* x-ï¿½ï¿½, y-ï¿½ï¿½, z-ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ã¼ ï¿½ï¿½ï¿½ï¿½ï¿½Ì´ï¿½.
+	ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ 1ï¿½ï¿½ ï¿½Ã¸ï¿½ï¿½Å³ï¿½ ï¿½ï¿½ï¿½Ì¸é¼­ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Æ®ï¿½ï¿½ ï¿½î¶»ï¿½ï¿½
+	ï¿½ï¿½ï¿½Ï´ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ìº¸ï¿½ï¿½ ï¿½Ù¶ï¿½ï¿½ï¿½.*/
 	int xObjects = 10, yObjects = 10, zObjects = 10, i = 0;
 	
-	// x-Ãà, y-Ãà, z-ÃàÀ¸·Î 21°³¾¿ ÃÑ 21 x 21 x 21 = 9261°³ÀÇ Á¤À°¸éÃ¼¸¦ »ý¼ºÇÏ°í ¹èÄ¡ÇÑ´Ù.
+	// x-ï¿½ï¿½, y-ï¿½ï¿½, z-ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 21ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ 21 x 21 x 21 = 9261ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï°ï¿½ ï¿½ï¿½Ä¡ï¿½Ñ´ï¿½.
 	
 	m_vObjects.reserve((xObjects * 2 + 1) * (yObjects * 2 + 1) * (zObjects * 2 + 1));
 
@@ -275,7 +276,7 @@ void CObjectsShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 				pRotatingObject = new CRotatingObject;
 
 				pRotatingObject->SetMesh(pCubeMesh);
-				// °¢ Á¤À°¸éÃ¼ °´Ã¼ÀÇ À§Ä¡¸¦ ¼³Á¤ÇÑ´Ù.
+				// ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¼ ï¿½ï¿½Ã¼ï¿½ï¿½ ï¿½ï¿½Ä¡ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½.
 				pRotatingObject->SetPosition(fxPitch*x, fyPitch*y, fzPitch*z);
 				pRotatingObject->SetRotationAxis(XMFLOAT3(0.0f, 1.0f, 0.0f));
 				pRotatingObject->SetRotationSpeed(10.0f * (i % 10) + 3.0f);
@@ -296,8 +297,19 @@ void CObjectsShader::ReleaseObjects()
 void CObjectsShader::AnimateObjects(float fTimeElapsed)
 {
 	for (auto& pObject : m_vObjects) {
+		if (!pObject || !pObject->IsAlive()) continue;
 		pObject->Animate(fTimeElapsed);
 	}
+}
+
+void CObjectsShader::PruneDead()
+{
+	m_vObjects.erase(
+		std::remove_if(m_vObjects.begin(), m_vObjects.end(),
+			[](const std::shared_ptr<CGameObject>& sp) {
+				return !sp || !sp->IsAlive();
+			}),
+		m_vObjects.end());
 }
 
 D3D12_INPUT_LAYOUT_DESC CObjectsShader::CreateInputLayout()
@@ -343,6 +355,7 @@ void CObjectsShader::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera*
 	CShader::Render(pd3dCommandList, pCamera);
 
 	for (auto& pObjects : m_vObjects) {
+		if (!pObjects || !pObjects->IsAlive()) continue;
 		pObjects->Render(pd3dCommandList, pCamera);
 	}
 }
