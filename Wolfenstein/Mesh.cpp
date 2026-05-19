@@ -251,3 +251,77 @@ CCrosshairMesh::CCrosshairMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandLi
 CCrosshairMesh::~CCrosshairMesh()
 {
 }
+
+
+// ====================================================================================
+// CLifeBarMesh : 화면 중앙 하단의 라이프 칸 1개
+// ====================================================================================
+CLifeBarMesh::CLifeBarMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+	UINT nScreenWidth, UINT nScreenHeight,
+	UINT nSegmentIndex, UINT nTotalSegments,
+	UINT nSegmentWidthPx, UINT nSegmentHeightPx,
+	UINT nGapPx, UINT nBottomMarginPx,
+	XMFLOAT4 xmf4Color)
+	: CMesh(pd3dDevice, pd3dCommandList)
+{
+	// 한 칸 = 직사각형 1개 = 정점 4 / 인덱스 6.
+	m_nVertices = 4;
+	m_nStride = sizeof(CDiffusedVertex);
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	if (nScreenWidth == 0) nScreenWidth = 1;
+	if (nScreenHeight == 0) nScreenHeight = 1;
+	if (nTotalSegments == 0) nTotalSegments = 1;
+
+	// 라이프 바 전체 폭 / 한 칸 폭 / 간격을 NDC 단위로 환산.
+	// NDC 1 단위 = 해상도 절반 이므로 px * 2 / 해상도 가 된다.
+	const float segW = float(nSegmentWidthPx) * 2.0f / float(nScreenWidth);
+	const float segH = float(nSegmentHeightPx) * 2.0f / float(nScreenHeight);
+	const float gap = float(nGapPx) * 2.0f / float(nScreenWidth);
+	const float bottomMargin = float(nBottomMarginPx) * 2.0f / float(nScreenHeight);
+
+	// 가로 중앙 정렬: 전체 폭 = 칸N개 + 간격(N-1)개.
+	const float totalW = segW * float(nTotalSegments) + gap * float(nTotalSegments - 1);
+	const float leftEdge = -totalW * 0.5f;
+	// 칸 i 의 좌측 X = 좌측 끝 + i * (segW + gap).
+	const float xL = leftEdge + float(nSegmentIndex) * (segW + gap);
+	const float xR = xL + segW;
+	// 하단에서 bottomMargin 만큼 떨어진 곳에 위치.
+	const float yB = -1.0f + bottomMargin;
+	const float yT = yB + segH;
+
+	// 정점은 NDC 좌표로 직접 저장. VSHud 가 그대로 사용한다.
+	CDiffusedVertex pVertices[4];
+	pVertices[0] = CDiffusedVertex(XMFLOAT3(xL, yT, 0.0f), xmf4Color); // 좌상
+	pVertices[1] = CDiffusedVertex(XMFLOAT3(xR, yT, 0.0f), xmf4Color); // 우상
+	pVertices[2] = CDiffusedVertex(XMFLOAT3(xR, yB, 0.0f), xmf4Color); // 우하
+	pVertices[3] = CDiffusedVertex(XMFLOAT3(xL, yB, 0.0f), xmf4Color); // 좌하
+
+	m_pd3dVertexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		pVertices, m_nStride * m_nVertices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dVertexUploadBuffer);
+
+	m_d3dVertexBufferView.BufferLocation = m_pd3dVertexBuffer->GetGPUVirtualAddress();
+	m_d3dVertexBufferView.StrideInBytes = m_nStride;
+	m_d3dVertexBufferView.SizeInBytes = m_nStride * m_nVertices;
+
+	// 직사각형 1개 = 삼각형 2개 = 인덱스 6개 (CCW).
+	m_nIndices = 6;
+	UINT pnIndices[6] = { 0, 1, 2, 0, 2, 3 };
+
+	m_pd3dIndexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		pnIndices, sizeof(UINT) * m_nIndices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER,
+		&m_pd3dIndexUploadBuffer);
+
+	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+	m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+}
+
+CLifeBarMesh::~CLifeBarMesh()
+{
+}

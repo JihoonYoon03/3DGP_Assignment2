@@ -588,3 +588,84 @@ float ClampDistanceAgainstWalls(SceneState state,
 	}
 	return maxDist;
 }
+
+// 두 지점 사이를 수평 마칭으로 훑어 벽이 가로막는지 검사한다.
+// ClampDistanceAgainstWalls 와 같은 TILE * 0.25 간격을 사용하지만,
+// 시작 / 끝 셀 부근은 검사에서 제외하여 적/플레이어 본인이 서 있는 셀이
+// 자기 자신 때문에 시야가 막히는 일이 없게 한다.
+bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY)
+{
+	if (state != SceneState::MAP1 && state != SceneState::MAP2) return true;
+
+	const XMFLOAT3 delta{ to.x - from.x, 0.0f, to.z - from.z };
+	const float dist = sqrtf(delta.x * delta.x + delta.z * delta.z);
+	if (dist < 1e-5f) return true;
+	const float invLen = 1.0f / dist;
+	const XMFLOAT3 dn{ delta.x * invLen, 0.0f, delta.z * invLen };
+
+	const float kStep = TILE * 0.25f;
+	// 시작/끝 셀의 본인 위치는 건너뛴다 (kSkip ≈ 본인 AABB 반경).
+	const float kSkip = TILE * 0.5f;
+	const float dStart = kSkip;
+	const float dEnd = dist - kSkip;
+	if (dEnd <= dStart) return true; // 매우 가까우면 시야가 통한다고 본다
+
+	for (float d = dStart; d <= dEnd; d += kStep) {
+		const float sx = from.x + dn.x * d;
+		const float sz = from.z + dn.z * d;
+		if (IsBlockedInMap(state, sx, sz, eyeY)) return false;
+	}
+	return true;
+}
+
+// 적 스폰 위치를 무작위로 nMax 개 골라 반환한다. 플레이어 시작 위치 기준
+// Chebyshev 거리 ≥ 5 (= 반경 5타일 바깥) 인 보행 가능 셀만 후보로 삼는다.
+std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
+	XMFLOAT3 xmf3PlayerStart, int nMax, float fHalfBodyY)
+{
+	std::vector<XMFLOAT3> result;
+	if (state != SceneState::MAP1 && state != SceneState::MAP2) return result;
+
+	const std::vector<std::string>& grid =
+		(state == SceneState::MAP1) ? Map1Grid() : Map2Grid();
+	const int rows = static_cast<int>(grid.size());
+	const int cols = static_cast<int>(grid[0].size());
+	const float halfX = (cols - 1) * TILE * 0.5f;
+	const float halfZ = (rows - 1) * TILE * 0.5f;
+
+	// 플레이어 시작 위치의 (행, 열) 환산.
+	const int playerC = static_cast<int>(floorf((xmf3PlayerStart.x + halfX) / TILE + 0.5f));
+	const int playerR = static_cast<int>(floorf((xmf3PlayerStart.z + halfZ) / TILE + 0.5f));
+
+	std::vector<XMFLOAT3> candidates;
+	candidates.reserve(rows * cols);
+	for (int r = 0; r < rows; ++r) {
+		for (int c = 0; c < cols; ++c) {
+			const char ch = grid[r][c];
+			// 평면/단차 바닥만 스폰 후보.
+			const bool walkable = (ch == '.') || (ch >= '1' && ch <= '3');
+			if (!walkable) continue;
+
+			// Chebyshev 거리 (행/열 max) ≥ 5 (= 반경 5타일 바깥).
+			// windows.h 의 max 매크로 충돌을 피하기 위해 직접 비교.
+			const int dr = abs(r - playerR);
+			const int dc = abs(c - playerC);
+			const int cheb = (dr > dc) ? dr : dc;
+			if (cheb < 5) continue;
+
+			const float x = c * TILE - halfX;
+			const float z = r * TILE - halfZ;
+			const float floorY = GetFloorHeightAt(state, x, z);
+			candidates.emplace_back(x, floorY + fHalfBodyY, z);
+		}
+	}
+
+	// 무작위 셔플 후 앞에서 nMax 개 추출.
+	std::mt19937 rng{ std::random_device{}() };
+	std::shuffle(candidates.begin(), candidates.end(), rng);
+	// windows.h 의 min 매크로 충돌을 피하기 위해 삼항 연산자 사용.
+	const size_t cap = (nMax < 0) ? 0u : static_cast<size_t>(nMax);
+	const size_t take = (candidates.size() < cap) ? candidates.size() : cap;
+	result.assign(candidates.begin(), candidates.begin() + take);
+	return result;
+}

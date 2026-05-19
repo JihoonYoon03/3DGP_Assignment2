@@ -3,6 +3,8 @@
 #include "Timer.h"
 #include "Shader.h"
 
+#include <functional>
+
 class CButtonObject;
 class CCamera;
 class CGameObject;
@@ -65,6 +67,15 @@ public:
 	// Returns false if the scene is not on a gameplay map.
 	bool AddObjectToCurrentMap(std::shared_ptr<CGameObject> pObject);
 
+	// 플레이어가 적 총알에 피격되었을 때 호출되는 콜백을 등록한다.
+	// GameFramework 가 BuildObjects 단계에서 라이프 감소 람다를 등록한다.
+	void SetOnPlayerHit(std::function<void()> fn) { m_fnOnPlayerHit = std::move(fn); }
+
+	// 게임플레이 맵(MAP1/MAP2)의 동적 객체(Bullet/EnemyBullet/Enemy) 를 모두
+	// 제거한다. LANDING 으로 되돌아갈 때 잔존 객체를 정리하기 위함이며,
+	// 정적 미로 기하 자체는 보존한다.
+	void ResetGameplayState();
+
 	std::shared_ptr<CButtonObject> m_pStartButton;
 	bool m_bGameStartRequested = false;
 
@@ -88,4 +99,8 @@ protected:
 	// TPS ����� �� �׷����� �÷��̾� �𵨰� �� ���ü� �÷���.
 	std::shared_ptr<CGameObject> m_pPlayerModel;
 	bool m_bPlayerVisible = false;
+
+	// 적 총알이 플레이어에 적중했을 때 라이프를 깎기 위해 GameFramework 가
+	// 등록한 콜백. 등록되지 않으면 피격 처리를 스킵한다.
+	std::function<void()> m_fnOnPlayerHit;
 };
