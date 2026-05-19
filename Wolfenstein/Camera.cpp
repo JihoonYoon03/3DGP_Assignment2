@@ -39,7 +39,7 @@ void CCamera::GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlane
 
 void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up)
 {
-	// ?? ??Ŀ? 1??? ???? ???μ? ??? a????? Move/Rotate ??? ???????? ???.
+	// 이 함수는 1인칭 시점의 초기 위치와 방향을 셋업한다. 이후 Move/Rotate 호출이 누적된다.
 	m_xmf3Position = xmf3Position;
 
 	XMVECTOR vPos = XMLoadFloat3(&xmf3Position);
@@ -54,7 +54,7 @@ void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMF
 	XMStoreFloat3(&m_xmf3Right, vRight);
 	XMStoreFloat3(&m_xmf3Up, vUp);
 
-	// look ????κ??? yaw/pitch?? ?????? ???? Rotate ???? ??????? ????? ?? ????? ???.
+	// look 벡터로부터 yaw/pitch 를 역산해 둠으로써 이후 Rotate 호출이 자연스럽게 누적될 수 있도록 한다.
 	m_fPitch = asinf(m_xmf3Look.y);
 	m_fYaw = atan2f(m_xmf3Look.x, m_xmf3Look.z);
 
@@ -77,16 +77,16 @@ void CCamera::SetPosition(const XMFLOAT3& xmf3Position)
 
 void CCamera::Rotate(float fPitchDelta, float fYawDelta)
 {
-	// ??/????? ??? (Pitch / Yaw) ???? ???.
+	// 상하/좌우 회전(Pitch / Yaw) 각도 누적.
 	m_fPitch += fPitchDelta;
 	m_fYaw += fYawDelta;
 
-	// ????? ???/????? ??? ????? ??? o?? ?????? ????? ??(89??)???? ????????.
+	// 위/아래를 거의 수직으로 보면 시야가 뒤집힐 수 있으므로 거의 90도(89도) 근처에서 제한한다.
 	const float kPitchLimit = XMConvertToRadians(89.0f);
 	if (m_fPitch > kPitchLimit) m_fPitch = kPitchLimit;
 	if (m_fPitch < -kPitchLimit) m_fPitch = -kPitchLimit;
 
-	// Yaw?? 0~2?? ?????? ??????? (???o?).
+	// Yaw 는 -2π ~ +2π 범위로 정규화한다 (오버플로우 방지).
 	const float kTwoPi = XM_2PI;
 	if (m_fYaw > kTwoPi) m_fYaw -= kTwoPi;
 	if (m_fYaw < -kTwoPi) m_fYaw += kTwoPi;
@@ -96,7 +96,7 @@ void CCamera::Rotate(float fPitchDelta, float fYawDelta)
 
 void CCamera::RegenerateViewMatrix()
 {
-	// Pitch/Yaw?κ??? ???ο? look ????? ??????, ??-???? ??(0,1,0)???κ??? ??/???? ????? ??????.
+	// Pitch/Yaw 로부터 새 look 벡터를 만들고, 월드-업 축(0,1,0) 을 이용해 우/상 벡터를 재구성한다.
 	const float cp = cosf(m_fPitch);
 	const float sp = sinf(m_fPitch);
 	const float cy = cosf(m_fYaw);
@@ -133,7 +133,7 @@ void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 	// 행 우선 -> 열 우선을 위해 전치
 	XMStoreFloat4x4(&xmf4x4View, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4View)));
 
-	// Root Parameter Index 1에 16개의 32BitConstants
+	// Root Parameter Index 1 에 16개의 32BitConstants
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4View, 0);
 
 	XMFLOAT4X4 xmf4x4Projection;

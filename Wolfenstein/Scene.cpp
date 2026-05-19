@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "Landing.h"
 #include "Maps.h"
+#include "GameObject.h"
 
 CScene::CScene()
 {
@@ -87,14 +88,14 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 		m_vShaders[static_cast<size_t>(SceneState::LANDING)].SetObjects(std::move(vLandingObjects));
 	}
 
-	// 맵 1 (붉은 성채) 오브젝트 구성
+	// 맵 1 (회청색 돌 미로) 오브젝트 구성
 	{
 		std::vector<std::shared_ptr<CGameObject>> vMap1Objects;
 		BuildMap1Objects(pd3dDevice, pd3dCommandList, vMap1Objects);
 		m_vShaders[static_cast<size_t>(SceneState::MAP1)].SetObjects(std::move(vMap1Objects));
 	}
 
-	// 맵 2 (푸른 정찰소) 오브젝트 구성
+	// 맵 2 (갈색 벽돌 던전) 오브젝트 구성
 	{
 		std::vector<std::shared_ptr<CGameObject>> vMap2Objects;
 		BuildMap2Objects(pd3dDevice, pd3dCommandList, vMap2Objects);
@@ -112,6 +113,9 @@ void CScene::ReleaseObjects()
 	}
 
 	m_vShaders.clear();
+
+	// 플레이어 모델도 함께 해제.
+	m_pPlayerModel.reset();
 }
 
 
@@ -132,10 +136,10 @@ bool CScene::ProcessInput(UCHAR* pKeysBuffer)
 
 void CScene::AnimateObjects(float fTimeElapsed)
 {
-	// ???? ??u ????: ????? ??? (???o? ???¿? ?????, MAP_SELECT???? ??? ???).
-	m_fMiniatureAngle += fTimeElapsed * 0.6f; // rad/sec - oo?? ???
+	// 맵 선택 미니어처용 각도 회전 (랜딩 상태에는 무영향, MAP_SELECT 에서만 보임).
+	m_fMiniatureAngle += fTimeElapsed * 0.6f; // rad/sec
 
-	// ???? ??? ???? ????????? ??????????.
+	// 현재 상태의 셰이더 객체들을 애니메이션한다.
 	size_t idx = static_cast<size_t>(m_eCurrentState);
 	if (idx < m_vShaders.size()) {
 		m_vShaders[idx].AnimateObjects(fTimeElapsed);
@@ -143,11 +147,11 @@ void CScene::AnimateObjects(float fTimeElapsed)
 }
 
 namespace {
-	// MAP_SELECT ????? ????? ?? ???? ?ð??????? ??????? ????? ??? ??????.
-	constexpr float kMiniOffsetX = 28.0f;       // ?¿? ??????? X ???
-	constexpr float kMiniScale   = 0.18f;       // 30x30 ??(120????)?? ~21???? ????
-	constexpr float kHoverScale  = 1.18f;       // ??? ?? ??? ???
-	constexpr float kMiniTiltDeg = 45.0f;       // X?? ?? (???? ???? ??)
+	// MAP_SELECT 화면에서 두 개의 맵 미니어처를 좌우로 배치할 때 사용하는 상수들.
+	constexpr float kMiniOffsetX = 28.0f;       // 좌우 중심으로부터의 X 오프셋
+	constexpr float kMiniScale   = 0.18f;       // 30x30 맵(120 유닛)을 ~21 유닛으로 축소
+	constexpr float kHoverScale  = 1.18f;       // 호버 시 크기 비율
+	constexpr float kMiniTiltDeg = 45.0f;       // X 축 기울기 (위에서 보는 느낌)
 
 	XMMATRIX BuildMiniatureMatrix(float xOffset, float fSpinAngle, bool bHovered)
 	{
@@ -168,7 +172,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	pCamera->UpdateShaderVariables(pd3dCommandList);
 
 	if (m_eCurrentState == SceneState::MAP_SELECT) {
-		// MAP_SELECT?? ?????? ????????? ??? ???, MAP1?? MAP2?? ?????? ??????.
+		// MAP_SELECT 에서는 본격 인게임 씬을 그리지 않고, MAP1/MAP2 의 미니어처만 그린다.
 		const size_t map1Idx = static_cast<size_t>(SceneState::MAP1);
 		const size_t map2Idx = static_cast<size_t>(SceneState::MAP2);
 
@@ -184,10 +188,18 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 		return;
 	}
 
-	// ????? ??: ???? ??? ???? ?????????.
+	// 그 외 상태: 현재 상태의 셰이더만 렌더링.
 	size_t idx = static_cast<size_t>(m_eCurrentState);
 	if (idx < m_vShaders.size()) {
 		m_vShaders[idx].Render(pd3dCommandList, pCamera);
+	}
+
+	// 인게임 맵에서 TPS 모드로 토글되어 있으면 플레이어 모델을 함께 그린다.
+	// 직전에 m_vShaders[MAP*].Render 가 동일한 루트 시그너처와 PSO 를 바인딩한 상태이므로,
+	// CGameObject::Render 가 자체적으로 월드 행렬을 갱신하고 메시를 그리면 충분하다.
+	if (m_bPlayerVisible && m_pPlayerModel &&
+		(m_eCurrentState == SceneState::MAP1 || m_eCurrentState == SceneState::MAP2)) {
+		m_pPlayerModel->Render(pd3dCommandList, pCamera);
 	}
 }
 
@@ -196,6 +208,7 @@ void CScene::ReleaseUploadBuffers()
 	for (CObjectsShader& shader : m_vShaders) {
 		shader.ReleaseUploadBuffers();
 	}
+	if (m_pPlayerModel) m_pPlayerModel->ReleaseUploadBuffers();
 }
 
 void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nScreenHeight, const CCamera* pCamera)
@@ -203,7 +216,7 @@ void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nSc
 	if (!pCamera) return;
 
 	if (m_eCurrentState == SceneState::LANDING) {
-		// ???? ??? ????? ???? ??????? ???? ???.
+		// 랜딩 화면의 시작 버튼 히트 테스트.
 		if (!m_pStartButton) return;
 		if (m_bGameStartRequested) return;
 		const XMFLOAT4X4& view = pCamera->GetViewMatrix();
@@ -217,7 +230,7 @@ void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nSc
 	}
 
 	if (m_eCurrentState == SceneState::MAP_SELECT) {
-		// ??? ???? ??????? ?????? ??? ???? ??u???.
+		// 호버 중인 미니어처에 따라 맵 선택을 기록한다.
 		UpdateMapSelectHover(nMouseX, nMouseY, nScreenWidth, nScreenHeight, pCamera);
 		if (m_nHoveredMiniIndex == 0) {
 			m_nRequestedMap = 1;
@@ -244,11 +257,11 @@ void CScene::UpdateMapSelectHover(int nMouseX, int nMouseY, int nScreenWidth, in
 
 	int hover = -1;
 	float bestDist = 1e9f;
-	// ????? ????? ????? ????? ???????????? ???콺???? ????? ?????.
+	// 각 미니어처의 중심을 화면 좌표로 투영해 마우스와의 거리를 비교한다.
 	for (int i = 0; i < 2; ++i) {
 		const float xOffset = (i == 0) ? -kMiniOffsetX : +kMiniOffsetX;
 		XMMATRIX m = BuildMiniatureMatrix(xOffset, m_fMiniatureAngle, false);
-		// ???? ??? (0,0,0,1)?? m?? ??? ?? ????? ??? ????? ??.
+		// 원점 (0,0,0,1) 을 m 으로 변환해 미니어처의 월드 좌표 중심을 얻는다.
 		XMVECTOR vCenter = XMVector3Transform(XMVectorZero(), m);
 		XMVECTOR vCenterH = XMVectorSetW(vCenter, 1.0f);
 		XMVECTOR vClip = XMVector4Transform(vCenterH, matVP);
@@ -261,7 +274,7 @@ void CScene::UpdateMapSelectHover(int nMouseX, int nMouseY, int nScreenWidth, in
 		float dx = sx - nMouseX;
 		float dy = sy - nMouseY;
 		float dist = sqrtf(dx * dx + dy * dy);
-		// ?????? ????? ?????? ???. ????? ????? ~12%?? ??? ???.
+		// 화면 너비의 12% 정도를 호버 반경으로 사용.
 		float radius = nScreenWidth * 0.12f;
 		if (dist < radius && dist < bestDist) {
 			hover = i;
