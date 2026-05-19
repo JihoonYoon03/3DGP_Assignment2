@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 constexpr float ASPECT_RATIO = FRAME_BUFFER_WIDTH / FRAME_BUFFER_HEIGHT;
 

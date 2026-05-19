@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "GameObject.h"
 
@@ -35,8 +35,8 @@ enum class SceneState : int;
 // ���� �ٱ��̳� W(��), �ʹ� ���� ���� ��� �������� ó���Ѵ�.
 bool IsBlockedInMap(SceneState state, float x, float z, float fFeetY);
 
-// (x,z) ��ġ���� ���� ���� �ٴ�(Ȥ�� ��)�� Y ��ǥ�� ��ȯ�Ѵ�.
-// '.' �� 0, '1'~'9' �� STEP_H * digit, 'P' �� STEP_H * 6, 'W'/���� �ٱ��� 0.
+// (x,z) 위치에서 현재 맵의 바닥(또는 단차) 윗면 Y 좌표를 반환한다.
+// '.' 은 0, '1'~'3' 은 STEP_H * digit, 'W'/지도 바깥은 0 으로 처리.
 float GetFloorHeightAt(SceneState state, float x, float z);
 
 // Walk a horizontal ray from `fromXZ` in `dirXZ` direction up to `maxDist`

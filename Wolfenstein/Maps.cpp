@@ -1,4 +1,4 @@
-#include "stdafx.h"
+﻿#include "stdafx.h"
 #include "Maps.h"
 #include "Mesh.h"
 #include "Scene.h"
@@ -29,13 +29,13 @@ namespace {
 		vObjects.push_back(std::move(pObj));
 	}
 
-	// ���� �׸��带 �޾� �̷� ť�긦 ��ġ�Ѵ�.
-	// �� ���� �ǹ�:
-	//   'W' : �� (���̴� wallHeights ���� ���� ����, 0 �̸� �⺻ WALL_H)
-	//   '.' : ��� (���� 0)
-	//   '1' ~ '9' : �ش� ĭ ���� STEP_H * n ������ ���� ��
-	//   'P' : �ܻ� (STEP_H * 6 ����)
-	// �� �� ���ڴ� �ٴڸ� ���.
+	// 격자 그리드를 받아 미로 큐브를 배치한다.
+	// 셀 의미:
+	//   'W' : 벽 (높이는 wallHeights 가 0 이 아니면 그 값, 0 이면 기본 WALL_H)
+	//   '.' : 평면 바닥 (높이 0)
+	//   '1' ~ '3' : 바닥 큐브 자체가 STEP_H * n 높이로 솟아오른 단차 바닥
+	//               (별도의 슬랩을 위에 얹지 않고 큐브 윗면이 그 높이에 위치)
+	// 그 외 문자는 만나면 평면 바닥으로 처리.
 	void BuildMazeFromGrid(
 		ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		std::vector<std::shared_ptr<CGameObject>>& vObjects,
@@ -50,10 +50,10 @@ namespace {
 		const float halfX = (cols - 1) * TILE * 0.5f;
 		const float halfZ = (rows - 1) * TILE * 0.5f;
 
-		// Floor cells '1'..'5' encode height steps 1..5. There is no longer a
-		// separate yellow stair plate: the floor tile itself rises so its top
-		// face sits at step * STEP_H. The colorStair param is repurposed as
-		// the gradient endpoint, and colorPlatform is no longer used.
+		// 단차 바닥은 '1'..'3' 문자로 1~3 STEP_H 높이를 인코딩한다.
+		// 별도의 슬랩(판)을 위에 올리지 않고 바닥 큐브 자체의 두께를 늘려
+		// 윗면이 step * STEP_H 에 오도록 한다.
+		// colorStair 는 그라데이션의 끝점 색으로 재사용되고, colorPlatform 은 사용 X.
 		auto lerp4 = [](const XMFLOAT4& a, const XMFLOAT4& b, float t) {
 			XMFLOAT4 r;
 			r.x = a.x * (1.0f - t) + b.x * t;
@@ -86,9 +86,9 @@ namespace {
 					continue;
 				}
 
-				// Floor or stepped floor. step == 0 is the legacy '.' level.
+				// 평면('.') 또는 단차 바닥('1'..'3'). step == 0 은 '.' (기본 높이).
 				int step = 0;
-				if (ch >= '1' && ch <= '5') step = ch - '0';
+				if (ch >= '1' && ch <= '3') step = ch - '0';
 
 				const float topY = step * STEP_H;
 				const float blockH = topY + FLOOR_H;
@@ -179,26 +179,20 @@ namespace {
 		}
 	}
 
-	// Weighted sample for the region-to-region height delta. Most regions
-	// stay close to their neighbors (delta 0 or +-1) so the floor reads as
-	// gently varied, but a 25% chance of +-2 and 10% chance of +-3 gives
-	// occasional jumps that the player must clear with the jump key.
-	int SampleHeightDelta(std::mt19937& rng)
-	{
-		const unsigned r = rng() % 100u;
-		if (r < 30u) return 0;
-		if (r < 65u) return ((rng() & 1u) ? 1 : -1);
-		if (r < 90u) return ((rng() & 1u) ? 2 : -2);
-		return ((rng() & 1u) ? 3 : -3);
-	}
-
+	// === 영역별 랜덤 높이 부여 (소영역 + 균등 무작위) ===
+	// 보행 가능한 '.' 셀을 3~7칸 크기의 작은 영역으로 무작위 그리디 BFS 로 분할한 뒤,
+	// 각 영역에 0~3 STEP_H 범위의 무작위 높이를 부여한다.
+	// 같은 높이를 공유하는 연결 영역의 크기를 최소 3, 최대 7 로 유지하여
+	// "특정 구역에 두꺼운 판이 붙은" 외형 대신 곳곳이 잘게 변화하는 지형을 만든다.
+	// 점프 정점이 3 * STEP_H 이므로 모든 인접 영역 사이를 점프로 통과할 수 있다.
+	// 인접 영역끼리는 가능하면 다른 높이를 갖도록 보정해 시각적 단차를 강조한다.
 	void PartitionFloorRegions(std::vector<std::string>& grid, std::mt19937& rng)
 	{
 		const int rows = static_cast<int>(grid.size());
 		const int cols = static_cast<int>(grid[0].size());
+		const int d4[4][2] = { {-1,0},{1,0},{0,-1},{0,1} };
 
-		// 1. ���� �� ���� (���� ���� (1,1))
-		const int startR = 1, startC = 1;
+		// 1. 보행 가능한 '.' 셀 모음
 		std::vector<std::pair<int, int>> walkable;
 		for (int r = 0; r < rows; ++r) {
 			for (int c = 0; c < cols; ++c) {
@@ -207,92 +201,53 @@ namespace {
 		}
 		if (walkable.empty()) return;
 
-		// 2. K ���� �õ� ����. ���� ���� �׻� ù �õ�� ����.
-		// Fewer seeds -> larger average region so the "same height runs >= 3 tiles"
-		// requirement is satisfied for the vast majority of regions, and tiny
-		// stragglers are merged below.
-		const int K = (std::max)(3, static_cast<int>(walkable.size()) / 120);
-		std::vector<std::pair<int, int>> seeds;
-		seeds.emplace_back(startR, startC);
-		std::vector<int> idx(walkable.size());
-		for (size_t i = 0; i < idx.size(); ++i) idx[i] = static_cast<int>(i);
-		for (int i = static_cast<int>(idx.size()) - 1; i > 0; --i) {
+		// 2. 시드 순회 순서를 무작위로 섞는다 (Fisher-Yates).
+		std::vector<int> order(walkable.size());
+		for (size_t i = 0; i < order.size(); ++i) order[i] = static_cast<int>(i);
+		for (int i = static_cast<int>(order.size()) - 1; i > 0; --i) {
 			int j = static_cast<int>(rng() % static_cast<unsigned>(i + 1));
-			std::swap(idx[i], idx[j]);
-		}
-		for (size_t i = 0; static_cast<int>(seeds.size()) < K && i < idx.size(); ++i) {
-			auto p = walkable[idx[i]];
-			if (p.first == startR && p.second == startC) continue;
-			seeds.push_back(p);
+			std::swap(order[i], order[j]);
 		}
 
-		// 3. ���� �ҽ� BFS: ��� '.' ���� ���� ����� �õ��� regionId �� �ο�.
+		// 3. 그리디 BFS 성장: 미할당 셀을 시드로 잡아 목표 3~7 크기까지 키운다.
+		//    매 pop 마다 4-방향 순서를 섞어 길쭉한 편향을 줄인다.
 		std::vector<std::vector<int>> regionId(rows, std::vector<int>(cols, -1));
-		std::queue<std::pair<int, int>> bfs;
-		for (int i = 0; i < static_cast<int>(seeds.size()); ++i) {
-			regionId[seeds[i].first][seeds[i].second] = i;
-			bfs.push(seeds[i]);
-		}
-		const int d4[4][2] = { {-1,0},{1,0},{0,-1},{0,1} };
-		while (!bfs.empty()) {
-			std::pair<int, int> cur = bfs.front(); bfs.pop();
-			const int r = cur.first, c = cur.second;
-			for (int k = 0; k < 4; ++k) {
-				int nr = r + d4[k][0], nc = c + d4[k][1];
-				if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-				if (grid[nr][nc] != '.') continue;
-				if (regionId[nr][nc] != -1) continue;
-				regionId[nr][nc] = regionId[r][c];
-				bfs.emplace(nr, nc);
+		std::vector<std::vector<std::pair<int, int>>> regionCells;
+		for (int idx : order) {
+			const int sr = walkable[idx].first;
+			const int sc = walkable[idx].second;
+			if (regionId[sr][sc] != -1) continue;
+
+			const int rid = static_cast<int>(regionCells.size());
+			regionCells.emplace_back();
+			regionId[sr][sc] = rid;
+			regionCells[rid].emplace_back(sr, sc);
+
+			const int target = 3 + static_cast<int>(rng() % 5u); // 3..7
+			std::queue<std::pair<int, int>> bq;
+			bq.emplace(sr, sc);
+			while (static_cast<int>(regionCells[rid].size()) < target && !bq.empty()) {
+				std::pair<int, int> cur = bq.front(); bq.pop();
+				int dorder[4] = { 0,1,2,3 };
+				for (int i = 3; i > 0; --i) std::swap(dorder[i], dorder[rng() % static_cast<unsigned>(i + 1)]);
+				for (int k = 0; k < 4; ++k) {
+					if (static_cast<int>(regionCells[rid].size()) >= target) break;
+					int nr = cur.first + d4[dorder[k]][0];
+					int nc = cur.second + d4[dorder[k]][1];
+					if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+					if (grid[nr][nc] != '.') continue;
+					if (regionId[nr][nc] != -1) continue;
+					regionId[nr][nc] = rid;
+					regionCells[rid].emplace_back(nr, nc);
+					bq.emplace(nr, nc);
+				}
 			}
 		}
 
-		// Merge tiny regions (< 3 cells) into their largest neighbor so every
-		// remaining region runs for at least 3 contiguous tiles. We loop until
-		// no small region remains.
-		{
-			const int K_REG_TMP = static_cast<int>(seeds.size());
-			std::vector<int> sizes(K_REG_TMP, 0);
-			auto recomputeSizes = [&]() {
-				std::fill(sizes.begin(), sizes.end(), 0);
-				for (int r = 0; r < rows; ++r)
-					for (int c = 0; c < cols; ++c)
-						if (regionId[r][c] >= 0) sizes[regionId[r][c]]++;
-			};
-			bool changed = true;
-			int guard = 0;
-			while (changed && guard++ < K_REG_TMP * 2) {
-				changed = false;
-				recomputeSizes();
-				int target = -1;
-				for (int rid = 0; rid < K_REG_TMP; ++rid) {
-					if (sizes[rid] > 0 && sizes[rid] < 3) { target = rid; break; }
-				}
-				if (target < 0) break;
-				int bestNb = -1, bestSize = -1;
-				for (int r = 0; r < rows && bestSize < (int)sizes.size(); ++r) {
-					for (int c = 0; c < cols; ++c) {
-						if (regionId[r][c] != target) continue;
-						for (int k = 0; k < 4; ++k) {
-							int nr = r + d4[k][0], nc = c + d4[k][1];
-							if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-							int oid = regionId[nr][nc];
-							if (oid < 0 || oid == target) continue;
-							if (sizes[oid] > bestSize) { bestSize = sizes[oid]; bestNb = oid; }
-						}
-					}
-				}
-				if (bestNb < 0) break;
-				for (int r = 0; r < rows; ++r)
-					for (int c = 0; c < cols; ++c)
-						if (regionId[r][c] == target) regionId[r][c] = bestNb;
-				changed = true;
-			}
-		}
+		const int K = static_cast<int>(regionCells.size());
 
-		// 4. ���� ���� �׷��� ����
-		const int K_REG = static_cast<int>(seeds.size());
-		std::vector<std::vector<int>> adj(K_REG);
+		// 4. 인접 영역 그래프 (병합 및 색칠에 사용)
+		std::vector<std::vector<int>> adj(K);
 		auto addEdge = [&](int a, int b) {
 			if (a == b) return;
 			for (int x : adj[a]) if (x == b) return;
@@ -311,35 +266,72 @@ namespace {
 			}
 		}
 
-		// 5. ���� �������� BFS �� ���� ����. ���� ���� ���̸� -1, 0, +1 �� �ϳ��� ����.
-		std::vector<int> heightStep(K_REG, -1);
-		const int startRegion = regionId[startR][startC];
-		heightStep[startRegion] = 0;
-		std::queue<int> hq;
-		hq.push(startRegion);
-		while (!hq.empty()) {
-			int cur = hq.front(); hq.pop();
-			for (int nb : adj[cur]) {
-				if (heightStep[nb] != -1) continue;
-				// Weighted delta in [-3, +3]: mostly small differences, occasional
-				// 2- or 3-step drops that the player must clear with a jump
-				// (apex ~= 3 * STEP_H).
-				int delta = SampleHeightDelta(rng);
-				int cand = heightStep[cur] + delta;
-				if (cand < 0) cand = 0;
-				if (cand > 5) cand = 5;
-				heightStep[nb] = cand;
-				hq.push(nb);
+		// 5. 너무 작은 영역(1~2칸)을 이웃에 흡수한다.
+		//    합쳐도 7 을 넘지 않는 이웃 중 가장 작은 것을 우선. 모두 포화면
+		//    가장 작은 이웃에 합쳐 8~9 정도까지 허용.
+		auto mergeInto = [&](int src, int dst) {
+			for (auto& cell : regionCells[src]) regionId[cell.first][cell.second] = dst;
+			regionCells[dst].insert(regionCells[dst].end(), regionCells[src].begin(), regionCells[src].end());
+			regionCells[src].clear();
+			for (int nb : adj[src]) {
+				if (nb == dst) continue;
+				adj[nb].erase(std::remove(adj[nb].begin(), adj[nb].end(), src), adj[nb].end());
+				addEdge(dst, nb);
+			}
+			adj[src].clear();
+		};
+		bool changed = true;
+		while (changed) {
+			changed = false;
+			for (int rid = 0; rid < K; ++rid) {
+				const int sz = static_cast<int>(regionCells[rid].size());
+				if (sz == 0 || sz >= 3) continue;
+				int bestUnder = -1, bestUnderSize = 0x7fffffff;
+				int bestAny = -1, bestAnySize = 0x7fffffff;
+				for (int nb : adj[rid]) {
+					if (regionCells[nb].empty()) continue;
+					const int nsz = static_cast<int>(regionCells[nb].size());
+					if (nsz + sz <= 7 && nsz < bestUnderSize) { bestUnder = nb; bestUnderSize = nsz; }
+					if (nsz < bestAnySize) { bestAny = nb; bestAnySize = nsz; }
+				}
+				int dst = (bestUnder >= 0) ? bestUnder : bestAny;
+				if (dst < 0) continue; // 고립된 영역: 그대로 둠 (드문 케이스)
+				mergeInto(rid, dst);
+				changed = true;
 			}
 		}
 
-		// 6. ����� �׸��忡 ���. ���� 0 �� '.', 1~3 �� '1'~'3' ���� ����.
+		// 6. 영역별 높이 부여 [0..3]. 인접 영역과 다른 높이를 우선 선택해
+		//    시각적으로 평탄한 덩어리가 생기지 않도록 한다.
+		std::vector<int> heights(K, -1);
+		for (int rid = 0; rid < K; ++rid) {
+			if (regionCells[rid].empty()) continue;
+			bool taken[4] = { false, false, false, false };
+			for (int nb : adj[rid]) {
+				if (heights[nb] >= 0 && heights[nb] < 4) taken[heights[nb]] = true;
+			}
+			int options[4]; int nOpt = 0;
+			for (int h = 0; h < 4; ++h) if (!taken[h]) options[nOpt++] = h;
+			if (nOpt > 0) {
+				heights[rid] = options[rng() % static_cast<unsigned>(nOpt)];
+			} else {
+				// 4 색이 모두 막힌 매우 드문 경우: 그냥 무작위.
+				heights[rid] = static_cast<int>(rng() % 4u);
+			}
+		}
+
+		// 7. 스폰 셀 (1,1) 소속 영역은 0 으로 강제 (스폰 직후 공중에 뜨지 않게).
+		if (1 < rows && 1 < cols && regionId[1][1] >= 0) {
+			heights[regionId[1][1]] = 0;
+		}
+
+		// 8. 결과를 그리드에 반영. 높이 0 은 '.' 유지, 1~3 은 '1'~'3' 으로 기록.
 		for (int r = 0; r < rows; ++r) {
 			for (int c = 0; c < cols; ++c) {
 				if (grid[r][c] != '.') continue;
 				int rid = regionId[r][c];
 				if (rid < 0) continue;
-				int h = heightStep[rid];
+				int h = heights[rid];
 				if (h > 0) grid[r][c] = static_cast<char>('0' + h);
 			}
 		}
@@ -505,12 +497,12 @@ MapInfo GetMap2Info()
 	info.cameraLookAt   = XMFLOAT3(3.0f * TILE - 58.0f, MAP_EYE_HEIGHT - 0.2f, 1.0f * TILE - 58.0f);
 	return info;
 }
-// ===================== �浹 ó�� =====================
-// �÷��̾� �� ����(fFeetY) �� ������� (x,z) ���� �̵��� �������� �����Ѵ�.
-// W : �׻� ����.
-// 1~9 / P : ���� ������ fFeetY + STEP_UP_TOLERANCE ���� ������ ����.
-// '.' : �׻� ���.
-// ���� �ٱ��� ��� ����.
+// ===================== 충돌 처리 =====================
+// 플레이어 발 높이(fFeetY) 를 기준으로 (x,z) 방향 이동이 가능한지 판정한다.
+// W       : 항상 막힘.
+// '1'~'3' : 단차 윗면이 fFeetY + STEP_UP_TOLERANCE 보다 높으면 막힘.
+// '.'     : 항상 통과.
+// 지도 바깥은 막힘 취급.
 namespace {
 	constexpr float STEP_UP_TOLERANCE = STEP_H + 0.05f;
 

@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include "Mesh.h"
 #include "GameObject.h"
@@ -77,7 +77,7 @@ protected:
 	std::vector<std::shared_ptr<CLetterObject>> m_vLetters;
 	XMFLOAT3 m_xmf3BoundingMin{ 0.0f, 0.0f, 0.0f };
 	XMFLOAT3 m_xmf3BoundingMax{ 0.0f, 0.0f, 0.0f };
-	// ±ÛÀÚ ¸Þ½Ã ÇÑ ÇÈ¼¿ÀÇ ¿ùµå ´ÜÀ§ Å©±â. ¹Ù¿îµù ¹Ú½º º¸Á¤¿¡ »ç¿ëÇÑ´Ù(unit/pixel).
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½Þ½ï¿½ ï¿½ï¿½ ï¿½È¼ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Å©ï¿½ï¿½. ï¿½Ù¿ï¿½ï¿½ ï¿½Ú½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ñ´ï¿½(unit/pixel).
 	float m_fPixelSize = 0.0f;
 
 	void UpdateBoundingBox();

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include "Scene.h"
 
@@ -160,7 +160,8 @@ private:
 	std::shared_ptr<CMesh> m_pBulletMesh;
 	// Cooldown so a held click does not spew bullets every frame.
 	float m_fFireCooldown = 0.0f;
-	// Small cube anchored in view space (centered on screen) drawn after the
-	// scene to serve as an aiming reticle in FPS and TPS.
+	// 화면 정중앙에 회전 없이 고정되는 십자선(+) 조준점.
+	// CCrosshairMesh(NDC 좌표) + CHudShader(월드/뷰/투영 무시) 조합으로 그려지므로
+	// 매 프레임 위치/회전 갱신 없이 항상 화면 정가운데에 표시된다.
 	std::shared_ptr<CGameObject> m_pCrosshair;
 };
