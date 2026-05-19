@@ -45,3 +45,16 @@ float GetFloorHeightAt(SceneState state, float x, float z);
 // TPS spring-arm so the camera does not penetrate level geometry.
 float ClampDistanceAgainstWalls(SceneState state,
 	XMFLOAT3 fromXZ, XMFLOAT3 dirXZ, float maxDist, float eyeY);
+
+// 두 점(from, to) 사이의 수평 시야가 벽/높은 단차에 막히지 않는지 확인한다.
+// 양 끝 셀은 검사에서 제외하여 시야 송신자/수신자 본인의 셀이 단차여도
+// 자기 자신 때문에 막힘 처리되지 않게 한다.
+// 적 AI의 LOS(시야) 판정에 사용된다.
+bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY);
+
+// 현재 맵에서 적이 스폰 가능한 위치(평면/단차 바닥) 중 플레이어의 시작
+// 타일과 Chebyshev 거리 ≥ 5 인 것 중 무작위로 최대 nMax 개를 선택해 반환한다.
+// 반환되는 XMFLOAT3 의 Y 는 해당 타일의 바닥 + halfBodyY 로 설정되어 있어
+// 그대로 적의 위치로 사용 가능하다.
+std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
+	XMFLOAT3 xmf3PlayerStart, int nMax, float fHalfBodyY = 1.3f);

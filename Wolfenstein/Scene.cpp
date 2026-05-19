@@ -158,8 +158,45 @@ void CScene::AnimateObjects(float fTimeElapsed)
 					a->Kill();
 					b->OnHit(a);
 				});
+
+			// EnemyBullet × Player 충돌.
+			// m_pPlayerModel 은 렌더 이중화 방지를 위해 m_vObjects 에 넣지 않으므로
+			// 여기서 직접 AABB 비교를 수행한다. 충돌 시 적 총알을 죽이고 라이프
+			// 감소 콜백을 호출한다 (Bullet × EnemyBullet 페어는 등록하지 않아 통과).
+			if (m_pPlayerModel) {
+				for (auto& pObj : m_vShaders[idx].GetObjects()) {
+					if (!pObj || !pObj->IsAlive()) continue;
+					if (pObj->GetTag() != EObjectTag::EnemyBullet) continue;
+					if (Collision::AABBOverlap(*pObj, *m_pPlayerModel)) {
+						pObj->Kill();
+						if (m_fnOnPlayerHit) m_fnOnPlayerHit();
+					}
+				}
+			}
+
 			m_vShaders[idx].PruneDead();
 		}
+	}
+}
+
+void CScene::ResetGameplayState()
+{
+	// MAP1/MAP2 슬롯의 동적 객체(Bullet/EnemyBullet/Enemy) 를 모두 제거한다.
+	// 정적 미로 큐브들(태그가 Generic) 은 남겨두어 다음 게임 시작 시 재사용한다.
+	for (size_t i : { static_cast<size_t>(SceneState::MAP1), static_cast<size_t>(SceneState::MAP2) }) {
+		if (i >= m_vShaders.size()) continue;
+		// PruneDead 와 동일한 erase-remove 패턴.
+		// 직접 컨테이너를 만지기 위해 GetObjects() const 가 아닌
+		// 객체 단위로 Kill() 후 PruneDead() 호출 방식을 사용.
+		const auto& vObjs = m_vShaders[i].GetObjects();
+		for (auto& pObj : vObjs) {
+			if (!pObj) continue;
+			const EObjectTag tag = pObj->GetTag();
+			if (tag == EObjectTag::Bullet || tag == EObjectTag::EnemyBullet || tag == EObjectTag::Enemy) {
+				pObj->Kill();
+			}
+		}
+		m_vShaders[i].PruneDead();
 	}
 }
 

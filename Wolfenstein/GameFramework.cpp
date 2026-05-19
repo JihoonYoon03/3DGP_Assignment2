@@ -337,9 +337,27 @@ void CGameFramework::BuildObjects()
 	}
 
 	// Shared mesh for bullets and the crosshair so spawning new ones is cheap.
+	// 플레이어 총알: 노란 큐브 (기존 색 유지)
 	m_pBulletMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		0.4f, 0.4f, 0.4f, true, XMFLOAT4(1.0f, 0.9f, 0.2f, 1.0f));
+
+	// 적 총알: 시각 구분을 위해 붉은 큐브.
+	m_pEnemyBulletMesh = std::make_shared<CCubeMeshDiffused>(
+		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+		0.4f, 0.4f, 0.4f, true, XMFLOAT4(1.0f, 0.25f, 0.20f, 1.0f));
+
+	// 적 공유 메시: 어두운 보라 계열 큐브. 플레이어(붉은색) 와 시각 구분.
+	m_pEnemyMesh = std::make_shared<CCubeMeshDiffused>(
+		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+		1.2f, 2.6f, 1.2f, true, XMFLOAT4(0.45f, 0.15f, 0.55f, 1.0f));
+
+	// HUD 셰이더 (십자선 + 라이프 바 공용). 깊이 OFF, 컬링 OFF.
+	// CreateShader 는 가상 함수이므로 base 포인터로 호출해도 CHudShader::CreateShader 가 디스패치된다.
+	m_pHudShader = std::make_shared<CHudShader>();
+	if (m_pScene) {
+		m_pHudShader->CreateShader(m_pd3dDevice.Get(), m_pScene->GetGraphicsRootSignature());
+	}
 
 	// 화면 정중앙 고정 십자선(+) 조준점. 정점이 NDC(클립 공간) 좌표로 미리
 	// 박혀 있으므로 카메라 회전/이동에 무관하게 항상 화면 정가운데에 그려진다.
@@ -348,13 +366,32 @@ void CGameFramework::BuildObjects()
 			m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 			UINT(m_nWndClientWidth), UINT(m_nWndClientHeight),
 			10u, 2u, XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
-		auto pHudShader = std::make_shared<CHudShader>();
-		if (m_pScene) {
-			pHudShader->CreateShader(m_pd3dDevice.Get(), m_pScene->GetGraphicsRootSignature());
-		}
 		m_pCrosshair = std::make_shared<CGameObject>();
 		m_pCrosshair->SetMesh(pCrosshairMesh);
-		m_pCrosshair->SetShader(pHudShader);
+		m_pCrosshair->SetShader(m_pHudShader);
+	}
+
+	// 라이프 바 칸 10개 생성. 모두 같은 색(붉은)으로 만들고, 매 프레임 m_nPlayerLife
+	// 개수만큼 앞에서부터만 렌더하여 잃은 칸은 그리지 않는다.
+	m_pLifeBarSegments.reserve(10);
+	for (UINT i = 0; i < 10u; ++i) {
+		auto pSegMesh = std::make_shared<CLifeBarMesh>(
+			m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+			UINT(m_nWndClientWidth), UINT(m_nWndClientHeight),
+			i, 10u, 22u, 8u, 4u, 24u,
+			XMFLOAT4(0.95f, 0.25f, 0.30f, 1.0f));
+		auto pSegObj = std::make_shared<CGameObject>();
+		pSegObj->SetMesh(pSegMesh);
+		pSegObj->SetShader(m_pHudShader);
+		m_pLifeBarSegments.push_back(std::move(pSegObj));
+	}
+
+	// 라이프 감소 콜백 등록. Scene 에서 EnemyBullet × Player 충돌 시 호출된다.
+	if (m_pScene) {
+		m_pScene->SetOnPlayerHit([this]() {
+			if (m_nPlayerLife > 0) --m_nPlayerLife;
+			if (m_nPlayerLife <= 0) m_bResetPending = true;
+		});
 	}
 
 	// Ŀ�ǵ� ����Ʈ�� �ݰ� ť�� �����Ͽ� GPU �� ��� ���ε带 �����ϰ� �Ѵ�.
@@ -368,7 +405,12 @@ void CGameFramework::BuildObjects()
 	// ���ε�� �ӽ� ���۵��� ����(���� ���۴� ����).
 	if (m_pScene) m_pScene->ReleaseUploadBuffers();
 	if (m_pBulletMesh) m_pBulletMesh->ReleaseUploadBuffers();
+	if (m_pEnemyBulletMesh) m_pEnemyBulletMesh->ReleaseUploadBuffers();
+	if (m_pEnemyMesh) m_pEnemyMesh->ReleaseUploadBuffers();
 	if (m_pCrosshair) m_pCrosshair->ReleaseUploadBuffers();
+	for (auto& pSeg : m_pLifeBarSegments) {
+		if (pSeg) pSeg->ReleaseUploadBuffers();
+	}
 
 	m_GameTimer.Reset();
 }
@@ -706,12 +748,54 @@ void CGameFramework::FireBullet()
 		m_xmf3PlayerPos.y + 0.2f,
 		m_xmf3PlayerPos.z + look.z * 0.8f };
 	const float kBulletSpeed = 25.0f;
-	auto pBullet = std::make_shared<CBulletObject>(origin, look, kBulletSpeed);
+	auto pBullet = std::make_shared<CBulletObject>(origin, look, kBulletSpeed, EObjectTag::Bullet);
 	pBullet->SetMesh(m_pBulletMesh);
 	pBullet->SetSceneState(state);
 	m_pScene->AddObjectToCurrentMap(pBullet);
 
 	m_fFireCooldown = 0.18f;
+}
+
+void CGameFramework::SpawnEnemyBullet(const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir)
+{
+	if (!m_pScene || !m_pEnemyBulletMesh) return;
+	const SceneState state = m_pScene->GetCurrentState();
+	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
+
+	// 적 총알은 플레이어 총알보다 조금 느려 회피 가능성을 남긴다.
+	const float kEnemyBulletSpeed = 18.0f;
+	auto pBullet = std::make_shared<CBulletObject>(xmf3Origin, xmf3Dir, kEnemyBulletSpeed, EObjectTag::EnemyBullet);
+	pBullet->SetMesh(m_pEnemyBulletMesh);
+	pBullet->SetSceneState(state);
+	m_pScene->AddObjectToCurrentMap(pBullet);
+}
+
+void CGameFramework::SpawnEnemiesForMap(SceneState state)
+{
+	if (!m_pScene || !m_pEnemyMesh) return;
+	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
+
+	// 적은 AABB half y = 1.3 (몸체 높이 2.6). 플레이어 반경 5타일 바깥에서 무작위 추출.
+	const float kEnemyHalfY = 1.3f;
+	std::vector<XMFLOAT3> spawns = PickEnemySpawnPositions(state, m_xmf3PlayerPos, 10, kEnemyHalfY);
+
+	std::mt19937 seedGen{ std::random_device{}() };
+	for (const XMFLOAT3& pos : spawns) {
+		// 인스턴스별 시드로 RNG 독립성 확보.
+		const unsigned int nSeed = seedGen();
+		auto pEnemy = std::make_shared<CEnemyObject>(state, nSeed);
+		pEnemy->SetMesh(m_pEnemyMesh);
+		pEnemy->SetPosition(pos);
+		// 적이 총알을 발사할 때 호출되는 콜백 — GameFramework 의 SpawnEnemyBullet 로 위임.
+		pEnemy->SetFireCallback([this](const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir) {
+			SpawnEnemyBullet(xmf3Origin, xmf3Dir);
+		});
+		// 시야 판정 / 추적 방향 계산을 위해 플레이어의 현재 위치를 가져온다.
+		pEnemy->SetPlayerPosGetter([this]() {
+			return m_xmf3PlayerPos;
+		});
+		m_pScene->AddObjectToCurrentMap(pEnemy);
+	}
 }
 
 void CGameFramework::AnimateObjects()
@@ -737,6 +821,33 @@ void CGameFramework::AnimateObjects()
 			m_pScene->TransitionToScene(SceneState::MAP2);
 			SetupGameCamera(SceneState::MAP2);
 		}
+	}
+
+	// 라이프 0 으로 사망 → 게임플레이 객체 정리 후 LANDING 화면으로 복귀.
+	// 사용자가 다시 GAME START 를 누르면 MAP_SELECT → MAP1/2 흐름으로 새 게임이 시작된다.
+	if (m_bResetPending) {
+		m_bResetPending = false;
+		m_pScene->ResetGameplayState();
+		m_nPlayerLife = 10;
+		m_pScene->TransitionToScene(SceneState::LANDING);
+		// 마우스 캡처 / 발사 쿨다운 / 점프 상태 초기화 — 다음 게임에서 깨끗하게 시작.
+		if (m_bMouseCaptured) {
+			::ShowCursor(TRUE);
+			m_bMouseCaptured = false;
+		}
+		m_fFireCooldown = 0.0f;
+		m_fVerticalVelocity = 0.0f;
+		m_bGrounded = true;
+		// 카메라를 랜딩 화면 시점으로 되돌린다.
+		if (m_pCamera) {
+			m_pCamera->GenerateViewMatrix(
+				XMFLOAT3(0.0f, 0.0f, -50.0f),
+				XMFLOAT3(0.0f, 0.0f, 0.0f),
+				XMFLOAT3(0.0f, 1.0f, 0.0f));
+			m_pCamera->SetMode(ECameraMode::FPS);
+		}
+		if (m_pScene) m_pScene->SetPlayerVisible(false);
+		::OutputDebugStringA("[GameFramework] Player died - returning to LANDING.\n");
 	}
 }
 
@@ -764,6 +875,24 @@ void CGameFramework::SetupGameCamera(SceneState state)
 	// Bullets fired on the previous map should not carry over; the cooldown
 	// is per-life, so reset it too.
 	m_fFireCooldown = 0.0f;
+
+	// 라이프 / 적 / 동적 객체 리셋. 이전 게임의 잔존 객체를 정리하고 새 적을 스폰한다.
+	// LANDING → MAP_SELECT → MAP1/2 로 들어오는 모든 경로에서 호출되므로,
+	// 죽고 다시 시작하는 흐름과 첫 게임 시작 흐름이 동일하게 동작한다.
+	m_nPlayerLife = 10;
+	m_bResetPending = false;
+	if (m_pScene) m_pScene->ResetGameplayState();
+	SpawnEnemiesForMap(state);
+
+	// 플레이어 모델의 위치를 새 스폰 위치로 즉시 동기화하여, 첫 프레임 충돌 판정이
+	// 이전 위치를 참조하지 않게 한다 (Scene::AnimateObjects 의 EnemyBullet × Player).
+	if (m_pPlayerModel) {
+		const XMFLOAT3 modelCenter{
+			m_xmf3PlayerPos.x,
+			m_xmf3PlayerPos.y - MAP_EYE_HEIGHT + 1.3f,
+			m_xmf3PlayerPos.z };
+		m_pPlayerModel->SetWorldYawAndPosition(m_pCamera->GetYaw(), modelCenter);
+	}
 }
 
 void CGameFramework::SetupMapSelectCamera()
@@ -876,6 +1005,15 @@ void CGameFramework::FrameAdvance()
 		const SceneState st = m_pScene->GetCurrentState();
 		if (st == SceneState::MAP1 || st == SceneState::MAP2) {
 			m_pCrosshair->Render(m_pd3dCommandList.Get(), m_pCamera.get());
+
+			// 라이프 바: 화면 중앙 하단. m_nPlayerLife 개수만큼 앞에서부터 렌더한다.
+			// 잃은 칸은 그리지 않는 단순 방식. CHudShader 를 공유하므로 PSO 전환 비용 없음.
+			const int nDraw = (m_nPlayerLife < 0) ? 0 : (m_nPlayerLife > 10 ? 10 : m_nPlayerLife);
+			for (int i = 0; i < nDraw && i < static_cast<int>(m_pLifeBarSegments.size()); ++i) {
+				if (m_pLifeBarSegments[i]) {
+					m_pLifeBarSegments[i]->Render(m_pd3dCommandList.Get(), m_pCamera.get());
+				}
+			}
 		}
 	}
 

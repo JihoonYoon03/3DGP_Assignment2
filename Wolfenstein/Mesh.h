@@ -99,3 +99,20 @@ public:
 		XMFLOAT4 xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
 	virtual ~CCrosshairMesh();
 };
+
+// 화면 중앙 하단에 위치하는 라이프 바 칸 한 개(작은 직사각형) 메시.
+// 한 인스턴스가 칸 1개를 NDC 좌표로 표현한다. nSegmentIndex(0..nTotalSegments-1)
+// 로 좌→우 순서를 정해 가로로 정렬된다. 활성 칸만 그리는 단순한 방식이므로
+// 잃은 라이프 칸은 GameFramework 측에서 그리지 않도록 분기 처리한다.
+// CHudShader 와 함께 사용 (월드/뷰/투영 무시, 깊이 OFF).
+class CLifeBarMesh : public CMesh
+{
+public:
+	CLifeBarMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+		UINT nScreenWidth, UINT nScreenHeight,
+		UINT nSegmentIndex, UINT nTotalSegments = 10,
+		UINT nSegmentWidthPx = 22, UINT nSegmentHeightPx = 8,
+		UINT nGapPx = 4, UINT nBottomMarginPx = 24,
+		XMFLOAT4 xmf4Color = XMFLOAT4(0.95f, 0.25f, 0.30f, 1.0f));
+	virtual ~CLifeBarMesh();
+};

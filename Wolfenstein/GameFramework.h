@@ -56,6 +56,13 @@ public:
 	// not flood the scene.
 	void FireBullet();
 
+	// 적이 호출하는 총알 발사. 좌표/방향은 적 AI 가 직접 결정한다.
+	// EObjectTag::EnemyBullet 으로 태깅된 총알이 Scene 에 추가된다.
+	void SpawnEnemyBullet(const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir);
+
+	// 현재 맵에 적을 PickEnemySpawnPositions 결과만큼 스폰한다.
+	void SpawnEnemiesForMap(SceneState state);
+
 	void MoveToNextFrame();
 
 	std::unique_ptr<class CCamera> m_pCamera;
@@ -164,4 +171,18 @@ private:
 	// CCrosshairMesh(NDC 좌표) + CHudShader(월드/뷰/투영 무시) 조합으로 그려지므로
 	// 매 프레임 위치/회전 갱신 없이 항상 화면 정가운데에 표시된다.
 	std::shared_ptr<CGameObject> m_pCrosshair;
+
+	// === 적 / 라이프 시스템 ===
+	// m_pEnemyMesh: 모든 적이 공유하는 큐브 메시. 색은 어두운 보라 계열.
+	// m_pEnemyBulletMesh: 적 총알 전용 메시. 플레이어 총알과 색을 구분 (붉은 계열).
+	// m_pHudShader: 십자선과 라이프 바 칸이 공유하는 HUD 셰이더.
+	// m_pLifeBarSegments: 라이프 칸 10개. m_nPlayerLife 개수만큼 앞에서부터 렌더.
+	// m_nPlayerLife: 남은 라이프. 적 총알 1발에 1 감소. 0 이 되면 LANDING 으로 복귀.
+	// m_bResetPending: 라이프 0 으로 죽었을 때 다음 프레임에 LANDING 으로 보낼 트리거.
+	std::shared_ptr<CMesh>   m_pEnemyMesh;
+	std::shared_ptr<CMesh>   m_pEnemyBulletMesh;
+	std::shared_ptr<CShader> m_pHudShader;
+	std::vector<std::shared_ptr<CGameObject>> m_pLifeBarSegments;
+	int  m_nPlayerLife = 10;
+	bool m_bResetPending = false;
 };

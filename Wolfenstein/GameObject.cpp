@@ -188,10 +188,14 @@ void CRotatingObject::Animate(float fTimeElapsed)
 // ==========================================================================
 // CBulletObject
 // ==========================================================================
-CBulletObject::CBulletObject(const XMFLOAT3& xmf3Start, const XMFLOAT3& xmf3Dir, float fSpeed)
+// eTag 에 EObjectTag::Bullet 또는 EObjectTag::EnemyBullet 을 전달하여 같은
+// 클래스 본체로 플레이어 총알과 적 총알을 모두 표현한다. 충돌 페어 등록은
+// Scene::AnimateObjects 에서 태그 단위로 분리된다.
+CBulletObject::CBulletObject(const XMFLOAT3& xmf3Start, const XMFLOAT3& xmf3Dir, float fSpeed,
+	EObjectTag eTag)
 	: m_eSceneState(static_cast<SceneState>(0))
 {
-	m_eTag = EObjectTag::Bullet;
+	m_eTag = eTag;
 	m_xmf3AABBHalf = XMFLOAT3(0.2f, 0.2f, 0.2f);
 	float len = sqrtf(xmf3Dir.x * xmf3Dir.x + xmf3Dir.y * xmf3Dir.y + xmf3Dir.z * xmf3Dir.z);
 	if (len < 1e-5f) len = 1.0f;
@@ -228,5 +232,192 @@ void CBulletObject::Animate(float fTimeElapsed)
 	const float floorTopY = GetFloorHeightAt(m_eSceneState, pos.x, pos.z);
 	if (floorTopY > pos.y) {
 		m_bAlive = false;
+	}
+}
+
+// ==========================================================================
+// CEnemyObject
+// ==========================================================================
+CEnemyObject::CEnemyObject(SceneState eSceneState, unsigned int nSeed)
+	: m_eAIState(EEnemyAIState::Idle_Pause)
+	, m_fStateTimer(0.0f)
+	, m_xmf3IdleDir{ 0.0f, 0.0f, 0.0f }
+	, m_fFireCooldown(0.0f)
+	, m_fAimFreeze(0.0f)
+	, m_nHP(2)
+	, m_bAware(false)
+	, m_eSceneState(eSceneState)
+	, m_rng(nSeed)
+{
+	m_eTag = EObjectTag::Enemy;
+	// AABB 는 플레이어 모델과 동일한 크기로 잡아 충돌이 자연스럽게 처리되게 한다.
+	m_xmf3AABBHalf = XMFLOAT3(0.6f, 1.3f, 0.6f);
+	// 초기엔 잠시 정지하며 시작 (스폰 직후 즉시 추격 시야가 트이는 것을 약간 늦춤).
+	m_fStateTimer = RandFloat(2.0f, 3.0f);
+	m_fFireCooldown = RandFloat(2.0f, 3.0f);
+}
+
+CEnemyObject::~CEnemyObject()
+{
+}
+
+float CEnemyObject::RandFloat(float a, float b)
+{
+	std::uniform_real_distribution<float> dist(a, b);
+	return dist(m_rng);
+}
+
+XMFLOAT3 CEnemyObject::PickRandomFreeDirection()
+{
+	// 4방향(+X, -X, +Z, -Z) 중 막힌 곳을 제외하고 랜덤 선택.
+	// 인접 셀의 벽/높은 단차를 IsBlockedInMap 으로 판정한다.
+	const XMFLOAT3 dirs[4] = {
+		{ 1.0f, 0.0f, 0.0f },
+		{-1.0f, 0.0f, 0.0f },
+		{ 0.0f, 0.0f, 1.0f },
+		{ 0.0f, 0.0f,-1.0f },
+	};
+	XMFLOAT3 pos = GetPosition();
+	const float kProbe = 1.2f; // AABB half + 약간 여유로 다음 셀의 시작을 확인
+	const float kFeetY = pos.y - m_xmf3AABBHalf.y;
+	XMFLOAT3 freeDirs[4];
+	int nFree = 0;
+	for (int i = 0; i < 4; ++i) {
+		const float px = pos.x + dirs[i].x * kProbe;
+		const float pz = pos.z + dirs[i].z * kProbe;
+		if (!IsBlockedInMap(m_eSceneState, px, pz, kFeetY)) {
+			freeDirs[nFree++] = dirs[i];
+		}
+	}
+	if (nFree == 0) return XMFLOAT3(0.0f, 0.0f, 0.0f);
+	std::uniform_int_distribution<int> dist(0, nFree - 1);
+	return freeDirs[dist(m_rng)];
+}
+
+void CEnemyObject::TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep)
+{
+	// 플레이어 이동(GameFramework.cpp:602-609) 과 동일한 X/Z 분리 프로브.
+	// 한 축이 막혀도 다른 축으로 미끄러질 수 있게 한다.
+	XMFLOAT3 pos = GetPosition();
+	const float kRadius = 0.7f; // AABB half x/z (0.6) + 약간 여유
+	const float kFeetY = pos.y - m_xmf3AABBHalf.y;
+
+	const float dx = xmf3Dir.x * fStep;
+	const float dz = xmf3Dir.z * fStep;
+
+	if (dx != 0.0f) {
+		const float probeX = pos.x + dx + (dx > 0.0f ? kRadius : -kRadius);
+		if (!IsBlockedInMap(m_eSceneState, probeX, pos.z, kFeetY)) pos.x += dx;
+	}
+	if (dz != 0.0f) {
+		const float probeZ = pos.z + dz + (dz > 0.0f ? kRadius : -kRadius);
+		if (!IsBlockedInMap(m_eSceneState, pos.x, probeZ, kFeetY)) pos.z += dz;
+	}
+
+	// 단차 위에서도 자연스럽게 서 있도록 매 프레임 Y 를 바닥에 스냅.
+	// (적은 점프/낙하가 없으므로 항상 바닥 위에 위치.)
+	const float floorY = GetFloorHeightAt(m_eSceneState, pos.x, pos.z);
+	pos.y = floorY + m_xmf3AABBHalf.y;
+	SetPosition(pos);
+}
+
+void CEnemyObject::Animate(float fTimeElapsed)
+{
+	if (!m_bAlive) return;
+	if (!m_fnGetPlayer) return; // 콜백 주입 전이면 아무것도 하지 않음
+
+	// 1. 타이머 감산
+	if (m_fStateTimer > 0.0f) m_fStateTimer -= fTimeElapsed;
+	if (m_fFireCooldown > 0.0f) m_fFireCooldown -= fTimeElapsed;
+	if (m_fAimFreeze > 0.0f) m_fAimFreeze -= fTimeElapsed;
+
+	// 2. 시야 판정 — 한 번 본 적은 영구 추적 (사용자 결정: 영구 추적)
+	const XMFLOAT3 myPos = GetPosition();
+	const XMFLOAT3 playerPos = m_fnGetPlayer();
+	if (!m_bAware) {
+		// eyeY 는 적/플레이어 모두에게 동일하게 적용하기 위해 MAP_EYE_HEIGHT 사용.
+		// 단차가 최대 3 * STEP_H = 2.1 로 eyeY=3.5 보다 낮아 실질적으론 W(벽)만 시야를 가린다.
+		if (HasLineOfSight(m_eSceneState, myPos, playerPos, MAP_EYE_HEIGHT)) {
+			m_bAware = true;
+			m_eAIState = EEnemyAIState::Pursue;
+		}
+	}
+	else {
+		m_eAIState = EEnemyAIState::Pursue;
+	}
+
+	const float kSpeed = 1.8f;             // 플레이어 6.0 * 0.3
+	const float kStep = kSpeed * fTimeElapsed;
+
+	// 3. 상태별 동작
+	switch (m_eAIState) {
+	case EEnemyAIState::Idle_Move:
+	{
+		const XMFLOAT3 oldPos = GetPosition();
+		TryMoveXZ(m_xmf3IdleDir, kStep);
+		const XMFLOAT3 newPos = GetPosition();
+		const bool bMoved = (oldPos.x != newPos.x) || (oldPos.z != newPos.z);
+
+		// 벽에 부딪혔거나 타이머가 만료되면 정지 상태로 전환.
+		if (!bMoved || m_fStateTimer <= 0.0f) {
+			m_eAIState = EEnemyAIState::Idle_Pause;
+			m_fStateTimer = RandFloat(2.0f, 3.0f);
+		}
+		break;
+	}
+	case EEnemyAIState::Idle_Pause:
+	{
+		if (m_fStateTimer <= 0.0f) {
+			// 4방향 중 벽 없는 방향을 무작위 선택해 패트롤 재개.
+			const XMFLOAT3 dir = PickRandomFreeDirection();
+			const float len = sqrtf(dir.x * dir.x + dir.z * dir.z);
+			if (len > 1e-5f) {
+				m_xmf3IdleDir = dir;
+				m_eAIState = EEnemyAIState::Idle_Move;
+				m_fStateTimer = RandFloat(1.0f, 2.0f);
+			}
+			else {
+				// 모든 방향이 막혀 있으면 잠깐 더 정지 후 재시도.
+				m_fStateTimer = RandFloat(1.0f, 2.0f);
+			}
+		}
+		break;
+	}
+	case EEnemyAIState::Pursue:
+	{
+		// 플레이어 방향 단위 벡터 (XZ 만 사용 — 총알은 수평으로 비행).
+		XMFLOAT3 dir{ playerPos.x - myPos.x, 0.0f, playerPos.z - myPos.z };
+		const float len = sqrtf(dir.x * dir.x + dir.z * dir.z);
+		if (len > 1e-5f) {
+			dir.x /= len; dir.z /= len;
+
+			// 발사 직후 m_fAimFreeze 동안은 멈춤 (사용자 결정: 발사 시 잠시 멈춤).
+			if (m_fAimFreeze <= 0.0f) {
+				TryMoveXZ(dir, kStep);
+			}
+
+			// 발사 쿨다운이 끝나면 총알 발사.
+			if (m_fFireCooldown <= 0.0f && m_fnFire) {
+				const XMFLOAT3 muzzle{
+					myPos.x + dir.x * 0.8f,
+					myPos.y + 0.2f,
+					myPos.z + dir.z * 0.8f };
+				m_fnFire(muzzle, dir);
+				m_fFireCooldown = RandFloat(2.0f, 3.0f);
+				m_fAimFreeze = 0.3f;
+			}
+		}
+		break;
+	}
+	}
+}
+
+void CEnemyObject::OnHit(CGameObject* /*pOther*/)
+{
+	// Scene::AnimateObjects 의 충돌 콜백이 b->OnHit(a) 형태로 호출한다.
+	// 플레이어 총알(a) 은 콜백 안에서 이미 Kill() 되므로 여기서는 체력만 감산.
+	--m_nHP;
+	if (m_nHP <= 0) {
+		Kill();
 	}
 }
