@@ -185,6 +185,13 @@ private:
 	float RandFloat(float a, float b);
 	// 헬퍼: 4방향 (+X,-X,+Z,-Z) 중 벽이 없는 방향을 랜덤 선택. 모두 막혀 있으면 zero 벡터.
 	XMFLOAT3 PickRandomFreeDirection();
+	// 헬퍼: 4방향 중 막히지 않으면서 towardsDir 과 내적이 최대인 방향. 없으면 zero.
+	XMFLOAT3 BestFreeDirectionToward(const XMFLOAT3& towardsDir);
 	// 헬퍼: dir 방향으로 fStep 만큼 이동을 시도한다. X/Z 축 분리 프로브.
 	void TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep);
+
+	// 점프 물리
+	bool  m_bJumping          = false;
+	float m_fVerticalVelocity = 0.0f;
+	float m_fJumpCooldown     = 0.0f;
 };

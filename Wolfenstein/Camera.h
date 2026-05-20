@@ -57,6 +57,12 @@ public:
 	// Returns the camera yaw used by the TPS path to keep the player model
 	// rotation in sync with the view direction.
 	float GetYaw() const { return m_fYaw; }
+	float GetPitch() const { return m_fPitch; }
+
+	// TPS 전용: pos 에 카메라를 놓고 target 을 바라보도록 look/right/up 과 뷰 행렬을
+	// 재생성한다. m_fPitch / m_fYaw(궤도 각도)는 변경하지 않으므로 다음 Rotate() 호출이
+	// 올바른 델타로 누적된다.
+	void SetPositionAndTarget(const XMFLOAT3& pos, const XMFLOAT3& target);
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
 
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ =	0.0f, float fMaxZ = 1.0f);
