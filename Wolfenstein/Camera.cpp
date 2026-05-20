@@ -145,6 +145,27 @@ void CCamera::ReleaseShaderVariables()
 {
 }
 
+void CCamera::SetPositionAndTarget(const XMFLOAT3& pos, const XMFLOAT3& target)
+{
+	m_xmf3Position = pos;
+
+	XMFLOAT3 d{ target.x - pos.x, target.y - pos.y, target.z - pos.z };
+	const float len = sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
+	if (len > 1e-5f) { d.x /= len; d.y /= len; d.z /= len; }
+	m_xmf3Look = d;
+
+	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	XMVECTOR vLook    = XMLoadFloat3(&m_xmf3Look);
+	XMVECTOR vRight   = XMVector3Normalize(XMVector3Cross(vWorldUp, vLook));
+	XMVECTOR vUp      = XMVector3Normalize(XMVector3Cross(vLook, vRight));
+	XMStoreFloat3(&m_xmf3Right, vRight);
+	XMStoreFloat3(&m_xmf3Up, vUp);
+
+	XMFLOAT3 upHint; XMStoreFloat3(&upHint, vUp);
+	m_xmf4x4View = Matrix4x4::LookAtLH(pos, target, upHint);
+	// m_fPitch / m_fYaw 는 궤도 각도로 유지 (변경 금지)
+}
+
 void CCamera::SetViewportsAndScissorRects(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	pd3dCommandList->RSSetViewports(1, &m_d3dViewport);

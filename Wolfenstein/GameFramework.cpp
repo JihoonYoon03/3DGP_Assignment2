@@ -703,21 +703,29 @@ void CGameFramework::ProcessInput()
 		// TPS: �÷��̾� �ڷ� kBack ��ŭ, ���� kUp ��ŭ ������ ��ġ�� ī�޶� �д�.
 		// Spring-arm: clamp the camera-to-player distance if a wall is in
 		// the way so the camera does not pop through level geometry.
-		const float kBack = 7.0f, kUp = 3.0f;
-		const XMFLOAT3 look = m_pCamera->GetLook();
-		const XMFLOAT3 backDir{ -look.x, 0.0f, -look.z };
-		const float eyeY = m_xmf3PlayerPos.y + kUp;
-		const float dist = ClampDistanceAgainstWalls(state, m_xmf3PlayerPos, backDir, kBack, eyeY);
-		const float backLen = sqrtf(backDir.x * backDir.x + backDir.z * backDir.z);
-		const float invLen = (backLen > 1e-5f) ? (1.0f / backLen) : 0.0f;
-		XMFLOAT3 tpsEye{
-			m_xmf3PlayerPos.x + backDir.x * invLen * dist,
-			eyeY,
-			m_xmf3PlayerPos.z + backDir.z * invLen * dist };
-		m_pCamera->SetPosition(tpsEye);
+		// TPS sphere orbit: yaw=수평, pitch=수직 궤도 각도. 카메라는 항상 플레이어를 바라본다.
+		const float kBack = 7.0f, kUp = 2.5f;
+		const float yaw   = m_pCamera->GetYaw();
+		const float pitch = m_pCamera->GetPitch();
 
-		// Rotate the player model with the camera yaw so it visibly faces
-		// the same direction the view is aimed at.
+		// 수평 back 방향(pitch 무관, 벽 클램프용 단위 벡터)
+		const XMFLOAT3 backDir{ -sinf(yaw), 0.0f, -cosf(yaw) };
+		// 수평/수직 거리 성분
+		const float horizBack = kBack * cosf(pitch);
+		const float vertBack  = kBack * sinf(pitch);
+		const float eyeY      = m_xmf3PlayerPos.y + vertBack + kUp;
+
+		// 벽 관통 방지(수평 거리만 클램프)
+		const float dist = ClampDistanceAgainstWalls(state, m_xmf3PlayerPos, backDir, horizBack, eyeY);
+
+		XMFLOAT3 tpsEye{
+			m_xmf3PlayerPos.x + backDir.x * dist,
+			eyeY,
+			m_xmf3PlayerPos.z + backDir.z * dist };
+
+		// 카메라가 항상 플레이어를 바라보도록(m_fPitch/m_fYaw 는 궤도 각도로 보존)
+		m_pCamera->SetPositionAndTarget(tpsEye, m_xmf3PlayerPos);
+
 		if (m_pPlayerModel) {
 			XMFLOAT3 modelCenter{
 				m_xmf3PlayerPos.x,
@@ -739,15 +747,20 @@ void CGameFramework::FireBullet()
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
 	if (m_fFireCooldown > 0.0f) return;
 
-	const XMFLOAT3 look = m_pCamera->GetLook();
-	// Always spawn ahead of the player's head so a TPS bullet does not
-	// originate visibly behind the player model, and FPS bullets do not
-	// immediately self-collide with the camera's host cell.
+	// TPS 모드: 카메라가 플레이어 look-at 으로 설정되므로 궤도 yaw 방향을 사용.
+	// FPS 모드: 카메라 look 방향 그대로.
+	XMFLOAT3 look;
+	if (m_pCamera->GetMode() == ECameraMode::TPS) {
+		const float yaw = m_pCamera->GetYaw();
+		look = { sinf(yaw), 0.0f, cosf(yaw) };
+	} else {
+		look = m_pCamera->GetLook();
+	}
 	XMFLOAT3 origin{
 		m_xmf3PlayerPos.x + look.x * 0.8f,
 		m_xmf3PlayerPos.y + 0.2f,
 		m_xmf3PlayerPos.z + look.z * 0.8f };
-	const float kBulletSpeed = 25.0f;
+	const float kBulletSpeed = 50.0f;
 	auto pBullet = std::make_shared<CBulletObject>(origin, look, kBulletSpeed, EObjectTag::Bullet);
 	pBullet->SetMesh(m_pBulletMesh);
 	pBullet->SetSceneState(state);

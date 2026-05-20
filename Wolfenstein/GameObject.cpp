@@ -294,30 +294,88 @@ XMFLOAT3 CEnemyObject::PickRandomFreeDirection()
 	return freeDirs[dist(m_rng)];
 }
 
+XMFLOAT3 CEnemyObject::BestFreeDirectionToward(const XMFLOAT3& towardsDir)
+{
+	const XMFLOAT3 dirs[4] = {
+		{  1.0f, 0.0f,  0.0f },
+		{ -1.0f, 0.0f,  0.0f },
+		{  0.0f, 0.0f,  1.0f },
+		{  0.0f, 0.0f, -1.0f },
+	};
+	XMFLOAT3 pos = GetPosition();
+	const float kProbe = 1.2f;
+	const float kFeetY = pos.y - m_xmf3AABBHalf.y;
+	XMFLOAT3 bestDir{ 0.0f, 0.0f, 0.0f };
+	float bestDot = -2.0f;
+	for (int i = 0; i < 4; ++i) {
+		const float px = pos.x + dirs[i].x * kProbe;
+		const float pz = pos.z + dirs[i].z * kProbe;
+		if (!IsBlockedInMap(m_eSceneState, px, pz, kFeetY)) {
+			const float dot = dirs[i].x * towardsDir.x + dirs[i].z * towardsDir.z;
+			if (dot > bestDot) {
+				bestDot = dot;
+				bestDir = dirs[i];
+			}
+		}
+	}
+	return bestDir;
+}
+
 void CEnemyObject::TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep)
 {
-	// 플레이어 이동(GameFramework.cpp:602-609) 과 동일한 X/Z 분리 프로브.
-	// 한 축이 막혀도 다른 축으로 미끄러질 수 있게 한다.
 	XMFLOAT3 pos = GetPosition();
-	const float kRadius = 0.7f; // AABB half x/z (0.6) + 약간 여유
+	const float kRadius = 0.7f;
 	const float kFeetY = pos.y - m_xmf3AABBHalf.y;
+	const float kGravity = 20.0f;
 
 	const float dx = xmf3Dir.x * fStep;
 	const float dz = xmf3Dir.z * fStep;
+	bool bBlockedByStep = false;
 
 	if (dx != 0.0f) {
 		const float probeX = pos.x + dx + (dx > 0.0f ? kRadius : -kRadius);
-		if (!IsBlockedInMap(m_eSceneState, probeX, pos.z, kFeetY)) pos.x += dx;
+		if (!IsBlockedInMap(m_eSceneState, probeX, pos.z, kFeetY)) {
+			pos.x += dx;
+		} else {
+			const float nextFloor = GetFloorHeightAt(m_eSceneState, probeX, pos.z);
+			if (nextFloor > kFeetY + 0.05f) bBlockedByStep = true;
+		}
 	}
 	if (dz != 0.0f) {
 		const float probeZ = pos.z + dz + (dz > 0.0f ? kRadius : -kRadius);
-		if (!IsBlockedInMap(m_eSceneState, pos.x, probeZ, kFeetY)) pos.z += dz;
+		if (!IsBlockedInMap(m_eSceneState, pos.x, probeZ, kFeetY)) {
+			pos.z += dz;
+		} else {
+			const float nextFloor = GetFloorHeightAt(m_eSceneState, pos.x, probeZ);
+			if (nextFloor > kFeetY + 0.05f) bBlockedByStep = true;
+		}
 	}
 
-	// 단차 위에서도 자연스럽게 서 있도록 매 프레임 Y 를 바닥에 스냅.
-	// (적은 점프/낙하가 없으므로 항상 바닥 위에 위치.)
-	const float floorY = GetFloorHeightAt(m_eSceneState, pos.x, pos.z);
-	pos.y = floorY + m_xmf3AABBHalf.y;
+	// 단차에 막혔고 아직 점프 중이 아닐 때만 점프 시작.
+	if (bBlockedByStep && !m_bJumping && m_fJumpCooldown <= 0.0f) {
+		float stepHeight = 0.0f;
+		if (dx != 0.0f) {
+			const float px = pos.x + dx + (dx > 0.0f ? kRadius : -kRadius);
+			const float h = GetFloorHeightAt(m_eSceneState, px, pos.z);
+			if (h > stepHeight) stepHeight = h;
+		}
+		if (dz != 0.0f) {
+			const float pz = pos.z + dz + (dz > 0.0f ? kRadius : -kRadius);
+			const float h = GetFloorHeightAt(m_eSceneState, pos.x, pz);
+			if (h > stepHeight) stepHeight = h;
+		}
+		const float jumpHRaw = stepHeight - kFeetY + 0.3f;
+		const float jumpH = (jumpHRaw > 0.5f) ? jumpHRaw : 0.5f;
+		m_fVerticalVelocity = sqrtf(2.0f * kGravity * jumpH);
+		m_bJumping = true;
+		m_fJumpCooldown = 2.0f;
+	}
+
+	// 점프 중이 아닐 때만 Y 를 바닥에 스냅.
+	if (!m_bJumping) {
+		const float floorY = GetFloorHeightAt(m_eSceneState, pos.x, pos.z);
+		pos.y = floorY + m_xmf3AABBHalf.y;
+	}
 	SetPosition(pos);
 }
 
@@ -330,6 +388,22 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	if (m_fStateTimer > 0.0f) m_fStateTimer -= fTimeElapsed;
 	if (m_fFireCooldown > 0.0f) m_fFireCooldown -= fTimeElapsed;
 	if (m_fAimFreeze > 0.0f) m_fAimFreeze -= fTimeElapsed;
+	if (m_fJumpCooldown > 0.0f) m_fJumpCooldown -= fTimeElapsed;
+
+	// 1b. 점프 물리 (상태머신과 독립적으로 매 프레임 처리)
+	if (m_bJumping) {
+		const float kGravity = 20.0f;
+		m_fVerticalVelocity -= kGravity * fTimeElapsed;
+		XMFLOAT3 jpos = GetPosition();
+		jpos.y += m_fVerticalVelocity * fTimeElapsed;
+		const float groundY = GetFloorHeightAt(m_eSceneState, jpos.x, jpos.z) + m_xmf3AABBHalf.y;
+		if (jpos.y <= groundY) {
+			jpos.y = groundY;
+			m_bJumping = false;
+			m_fVerticalVelocity = 0.0f;
+		}
+		SetPosition(jpos);
+	}
 
 	// 2. 시야 판정 — 한 번 본 적은 영구 추적 (사용자 결정: 영구 추적)
 	const XMFLOAT3 myPos = GetPosition();
@@ -358,8 +432,19 @@ void CEnemyObject::Animate(float fTimeElapsed)
 		const XMFLOAT3 newPos = GetPosition();
 		const bool bMoved = (oldPos.x != newPos.x) || (oldPos.z != newPos.z);
 
-		// 벽에 부딪혔거나 타이머가 만료되면 정지 상태로 전환.
-		if (!bMoved || m_fStateTimer <= 0.0f) {
+		if (!bMoved) {
+			// 벽 충돌: 즉시 새 방향 선택(긴 정지 없이 순찰 지속).
+			const XMFLOAT3 newDir = PickRandomFreeDirection();
+			const float newLen = sqrtf(newDir.x * newDir.x + newDir.z * newDir.z);
+			if (newLen > 1e-5f) {
+				m_xmf3IdleDir = newDir;
+				m_fStateTimer = RandFloat(1.0f, 2.0f);
+				// Idle_Move 유지, 방향만 변경
+			} else {
+				m_eAIState = EEnemyAIState::Idle_Pause;
+				m_fStateTimer = RandFloat(0.5f, 1.0f);
+			}
+		} else if (m_fStateTimer <= 0.0f) {
 			m_eAIState = EEnemyAIState::Idle_Pause;
 			m_fStateTimer = RandFloat(2.0f, 3.0f);
 		}
@@ -393,7 +478,17 @@ void CEnemyObject::Animate(float fTimeElapsed)
 
 			// 발사 직후 m_fAimFreeze 동안은 멈춤 (사용자 결정: 발사 시 잠시 멈춤).
 			if (m_fAimFreeze <= 0.0f) {
+				const XMFLOAT3 prePos = GetPosition();
 				TryMoveXZ(dir, kStep);
+				const XMFLOAT3 postPos = GetPosition();
+				const bool bStuck = (fabsf(postPos.x - prePos.x) < 1e-4f &&
+				                     fabsf(postPos.z - prePos.z) < 1e-4f);
+				if (bStuck) {
+					// 완전히 막혔을 때 플레이어 방향에 가장 가까운 빈 방향으로 우회.
+					const XMFLOAT3 avoidDir = BestFreeDirectionToward(dir);
+					const float avoidLen = sqrtf(avoidDir.x * avoidDir.x + avoidDir.z * avoidDir.z);
+					if (avoidLen > 1e-5f) TryMoveXZ(avoidDir, kStep);
+				}
 			}
 
 			// 발사 쿨다운이 끝나면 총알 발사.
