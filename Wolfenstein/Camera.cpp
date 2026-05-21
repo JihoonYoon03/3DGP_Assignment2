@@ -166,6 +166,13 @@ void CCamera::SetPositionAndTarget(const XMFLOAT3& pos, const XMFLOAT3& target)
 	// m_fPitch / m_fYaw 는 궤도 각도로 유지 (변경 금지)
 }
 
+void CCamera::SetPositionKeepOrientation(const XMFLOAT3& pos)
+{
+	// 숄더뷰 TPS: 위치만 옮기고 시선은 1인칭과 동일하게 m_fPitch/m_fYaw 로 재계산.
+	m_xmf3Position = pos;
+	RegenerateViewMatrix();
+}
+
 void CCamera::SetViewportsAndScissorRects(ID3D12GraphicsCommandList* pd3dCommandList)
 {
 	pd3dCommandList->RSSetViewports(1, &m_d3dViewport);

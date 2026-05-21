@@ -58,3 +58,10 @@ bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY);
 // 그대로 적의 위치로 사용 가능하다.
 std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 	XMFLOAT3 xmf3PlayerStart, int nMax, float fHalfBodyY = 1.3f);
+
+// 30x30 그리드 기반 A* 4방향 최단 경로 계산. (cx,cz) → (tx,tz) world XZ.
+// 통과 가능 여부는 IsBlockedInMap 과 동일 (fFeetY 기준). 경로가 없으면 false.
+// 결과 outPathXZ 는 출발 셀 다음부터 도착 셀까지의 셀 중심 world (x,z) 시퀀스.
+bool ComputeShortestPathXZ(SceneState state,
+	float cx, float cz, float tx, float tz, float fFeetY,
+	std::vector<XMFLOAT2>& outPathXZ);

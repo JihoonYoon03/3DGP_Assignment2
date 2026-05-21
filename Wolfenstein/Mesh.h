@@ -33,6 +33,9 @@ public:
 		m_xmf4Diffuse = xmf4Diffuse;
 	}
 	~CDiffusedVertex() {}
+
+	// face normal 계산용 position 접근자.
+	const XMFLOAT3& GetPosition() const { return m_xmf3Position; }
 };
 
 class CMesh {
@@ -63,8 +66,21 @@ protected:
 	UINT	m_nStartIndex = 0;
 	int		m_nBaseVertex = 0;
 
+	// 매쉬를 이루는 삼각형마다 face normal 한 개를 보관한다 (로컬 좌표계).
+	// 인덱스는 (triangle index = SV_PrimitiveID) 와 동일.
+	// 셰이더 파라미터(cbuffer b3)로 매 draw 시 업로드된다.
+	std::vector<XMFLOAT3> m_vFaceNormals;
+
+	// 정점 위치 배열과 인덱스 배열로부터 각 삼각형의 face normal 을 계산해
+	// m_vFaceNormals 를 채운다. 메쉬 생성자에서 호출.
+	void ComputeFaceNormalsFromIndexed(
+		const XMFLOAT3* pPositions, const UINT* pnIndices, UINT nIndices);
+
 public:
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList);
+
+	// 셰이더로 face normal 을 업로드할 때 사용.
+	const std::vector<XMFLOAT3>& GetFaceNormals() const { return m_vFaceNormals; }
 };
 
 class CTriangleMesh : public CMesh

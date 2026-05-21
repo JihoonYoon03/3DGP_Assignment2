@@ -80,8 +80,27 @@ void CGameObject::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandLi
 {
 	XMFLOAT4X4 xmf4x4World;
 	XMStoreFloat4x4(&xmf4x4World, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4World)));
-	// ��ü�� ���� ��ȯ ����� ��Ʈ ����� ���� ���̴� ����(cBuffer)�� �����Ѵ�.
+	// 객체의 월드 변환 행렬을 루트 상수로 전달.
 	pd3dCommandList->SetGraphicsRoot32BitConstants(0, 16, &xmf4x4World, 0);
+
+	// face normal 배열(b3) 업로드 — PS 가 SV_PrimitiveID 로 조회한다.
+	// 메쉬가 face normal 을 갖고 있을 때만 업로드 (CCrosshairMesh/CLifeBarMesh 는 미사용).
+	if (m_pMesh) {
+		const auto& v = m_pMesh->GetFaceNormals();
+		if (!v.empty()) {
+			constexpr size_t kMaxFaces = 12;  // root sig b3 의 float4 슬롯 개수와 일치.
+			float buf[kMaxFaces * 4] = {};
+			const size_t n = (v.size() < kMaxFaces) ? v.size() : kMaxFaces;
+			for (size_t i = 0; i < n; ++i) {
+				buf[i * 4 + 0] = v[i].x;
+				buf[i * 4 + 1] = v[i].y;
+				buf[i * 4 + 2] = v[i].z;
+				buf[i * 4 + 3] = 0.0f;
+			}
+			pd3dCommandList->SetGraphicsRoot32BitConstants(
+				3, static_cast<UINT>(n * 4), buf, 0);
+		}
+	}
 }
 
 void CGameObject::ReleaseShaderVariables()
@@ -470,34 +489,79 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	}
 	case EEnemyAIState::Pursue:
 	{
-		// 플레이어 방향 단위 벡터 (XZ 만 사용 — 총알은 수평으로 비행).
-		XMFLOAT3 dir{ playerPos.x - myPos.x, 0.0f, playerPos.z - myPos.z };
-		const float len = sqrtf(dir.x * dir.x + dir.z * dir.z);
-		if (len > 1e-5f) {
-			dir.x /= len; dir.z /= len;
+		if (m_fRepathTimer > 0.0f) m_fRepathTimer -= fTimeElapsed;
 
-			// 발사 직후 m_fAimFreeze 동안은 멈춤 (사용자 결정: 발사 시 잠시 멈춤).
+		// 플레이어 방향 단위 벡터 (XZ 만 사용 — 총알은 수평으로 비행).
+		XMFLOAT3 toPlayer{ playerPos.x - myPos.x, 0.0f, playerPos.z - myPos.z };
+		const float toPlayerLen = sqrtf(toPlayer.x*toPlayer.x + toPlayer.z*toPlayer.z);
+		if (toPlayerLen > 1e-5f) {
+			toPlayer.x /= toPlayerLen; toPlayer.z /= toPlayerLen;
+
+			const float kFeetY = myPos.y - m_xmf3AABBHalf.y;
+			const bool bHasLOS = HasLineOfSight(m_eSceneState, myPos, playerPos, MAP_EYE_HEIGHT);
+
+			// 이동 방향 결정: LOS 가 통하면 직선, 막히면 A* waypoint 추종.
+			XMFLOAT3 moveDir = toPlayer;
+			if (!bHasLOS) {
+				const bool bNeedRepath = m_vPath.empty()
+					|| m_nPathIdx >= m_vPath.size()
+					|| m_fRepathTimer <= 0.0f;
+				if (bNeedRepath) {
+					m_vPath.clear();
+					m_nPathIdx = 0;
+					ComputeShortestPathXZ(m_eSceneState,
+						myPos.x, myPos.z, playerPos.x, playerPos.z, kFeetY,
+						m_vPath);
+					m_fRepathTimer = 0.5f;
+				}
+
+				if (!m_vPath.empty() && m_nPathIdx < m_vPath.size()) {
+					// 현재 waypoint 가까워졌으면 인덱스++ 후 다음 waypoint 로 이동.
+					const XMFLOAT2& wp = m_vPath[m_nPathIdx];
+					XMFLOAT3 wdir{ wp.x - myPos.x, 0.0f, wp.y - myPos.z };
+					float wlen = sqrtf(wdir.x*wdir.x + wdir.z*wdir.z);
+					constexpr float kTileLocal = 4.0f;  // Maps.cpp 의 TILE 과 동일.
+					if (wlen < kTileLocal * 0.4f) {
+						++m_nPathIdx;
+						if (m_nPathIdx < m_vPath.size()) {
+							const XMFLOAT2& wp2 = m_vPath[m_nPathIdx];
+							wdir = { wp2.x - myPos.x, 0.0f, wp2.y - myPos.z };
+							wlen = sqrtf(wdir.x*wdir.x + wdir.z*wdir.z);
+						}
+					}
+					if (wlen > 1e-5f) {
+						moveDir = { wdir.x / wlen, 0.0f, wdir.z / wlen };
+					}
+				}
+			} else {
+				// LOS 통함 → 경로 무효화, 직선 추격.
+				m_vPath.clear();
+				m_nPathIdx = 0;
+			}
+
+			// 발사 직후 m_fAimFreeze 동안은 멈춤.
 			if (m_fAimFreeze <= 0.0f) {
 				const XMFLOAT3 prePos = GetPosition();
-				TryMoveXZ(dir, kStep);
+				TryMoveXZ(moveDir, kStep);
 				const XMFLOAT3 postPos = GetPosition();
 				const bool bStuck = (fabsf(postPos.x - prePos.x) < 1e-4f &&
 				                     fabsf(postPos.z - prePos.z) < 1e-4f);
 				if (bStuck) {
-					// 완전히 막혔을 때 플레이어 방향에 가장 가까운 빈 방향으로 우회.
-					const XMFLOAT3 avoidDir = BestFreeDirectionToward(dir);
+					// 경로상의 일시적 막힘 → 즉시 재계산 트리거 + 기존 4방향 우회를 백업으로.
+					m_fRepathTimer = 0.0f;
+					const XMFLOAT3 avoidDir = BestFreeDirectionToward(moveDir);
 					const float avoidLen = sqrtf(avoidDir.x * avoidDir.x + avoidDir.z * avoidDir.z);
 					if (avoidLen > 1e-5f) TryMoveXZ(avoidDir, kStep);
 				}
 			}
 
-			// 발사 쿨다운이 끝나면 총알 발사.
-			if (m_fFireCooldown <= 0.0f && m_fnFire) {
+			// 발사 쿨다운이 끝나고 LOS 가 통할 때만 발사 (벽 너머 사격 금지).
+			if (bHasLOS && m_fFireCooldown <= 0.0f && m_fnFire) {
 				const XMFLOAT3 muzzle{
-					myPos.x + dir.x * 0.8f,
+					myPos.x + toPlayer.x * 0.8f,
 					myPos.y + 0.2f,
-					myPos.z + dir.z * 0.8f };
-				m_fnFire(muzzle, dir);
+					myPos.z + toPlayer.z * 0.8f };
+				m_fnFire(muzzle, toPlayer);
 				m_fFireCooldown = RandFloat(2.0f, 3.0f);
 				m_fAimFreeze = 0.3f;
 			}

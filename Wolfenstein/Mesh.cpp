@@ -42,6 +42,26 @@ void CMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 	}
 }
 
+void CMesh::ComputeFaceNormalsFromIndexed(
+	const XMFLOAT3* pPositions, const UINT* pnIndices, UINT nIndices)
+{
+	const UINT nTris = nIndices / 3;
+	m_vFaceNormals.resize(nTris);
+	for (UINT t = 0; t < nTris; ++t) {
+		const XMFLOAT3& p0 = pPositions[pnIndices[t * 3 + 0]];
+		const XMFLOAT3& p1 = pPositions[pnIndices[t * 3 + 1]];
+		const XMFLOAT3& p2 = pPositions[pnIndices[t * 3 + 2]];
+		XMVECTOR v0 = XMLoadFloat3(&p0);
+		XMVECTOR v1 = XMLoadFloat3(&p1);
+		XMVECTOR v2 = XMLoadFloat3(&p2);
+		// 외향 노멀: (p1-p0) x (p2-p0). 큐브 인덱스 와인딩이 외향 normal 을
+		// 만드는지는 시각 검증 필요. 만일 안쪽으로 향하면 cross 인자 순서를 바꿀 것.
+		XMVECTOR n = XMVector3Normalize(XMVector3Cross(
+			XMVectorSubtract(v1, v0), XMVectorSubtract(v2, v0)));
+		XMStoreFloat3(&m_vFaceNormals[t], n);
+	}
+}
+
 
 // ====================================================================================
 // ====================================================================================
@@ -169,6 +189,11 @@ CCubeMeshDiffused::CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
 	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+
+	// face normal 캐시 — 픽셀 셰이더가 SV_PrimitiveID 로 조회한다.
+	XMFLOAT3 positions[8];
+	for (int i = 0; i < 8; ++i) positions[i] = pVertices[i].GetPosition();
+	ComputeFaceNormalsFromIndexed(positions, pnIndices, m_nIndices);
 }
 
 CCubeMeshDiffused::~CCubeMeshDiffused()

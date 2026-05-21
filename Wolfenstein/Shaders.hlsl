@@ -10,9 +10,24 @@ cbuffer cbCameraInfo : register(b1)
     matrix gmtxProjection : packoffset(c4);
 };
 
-// 정점 셰이더를 정의한다. 
+// 라이트 정보 (방향광 + 앰비언트) — PS 에서 사용.
+cbuffer cbLight : register(b2)
+{
+    float3 gLightDir;   float gLightPad0;   // 정규화된 빛 진행 방향
+    float3 gLightColor; float gLightPad1;   // 빛 색상
+    float3 gAmbient;    float gLightPad2;   // 환경광
+};
 
-// 정점 셰이더의 입력을 위한 구조체를 선언한다. 
+// 매쉬 삼각형마다의 face normal (로컬 좌표) — PS 가 SV_PrimitiveID 로 조회.
+// float4 배열로 정렬해 cbuffer 한 슬롯에 담는다. 큐브 = 12 triangle.
+cbuffer cbFaceNormals : register(b3)
+{
+    float4 gFaceNormals[12];
+};
+
+// 정점 셰이더를 정의한다.
+
+// 정점 셰이더의 입력을 위한 구조체를 선언한다.
 struct VS_INPUT
 {
     float3 position : POSITION;
@@ -34,14 +49,25 @@ VS_OUTPUT VSDiffused(VS_INPUT input)
     // 정점을 변환(월드-카메라-투영)한다.
     output.position = mul(mul(mul(float4(input.position, 1.0f), gmtxWorld), gmtxView), gmtxProjection);
     output.color = input.color;
-    
+
     return output;
 }
 
-// 픽셀 셰이더를 정의한다.
-float4 PSDiffused(VS_OUTPUT input) : SV_TARGET
+// 픽셀 셰이더 — 퐁 모델의 디퓨즈 항 + 앰비언트.
+// primId(SV_PrimitiveID) 로 face normal 을 조회하므로 flat shading 결과가 된다.
+float4 PSDiffused(VS_OUTPUT input, uint primId : SV_PrimitiveID) : SV_TARGET
 {
-    return input.color;
+    // 1) 로컬 face normal → 월드 변환 (균등 스케일 가정).
+    float3 nLocal = gFaceNormals[primId].xyz;
+    float3 nWorld = normalize(mul(nLocal, (float3x3)gmtxWorld));
+
+    // 2) Lambert 디퓨즈: max(N · (-L), 0). L 은 빛이 진행하는 방향.
+    float ndl = saturate(dot(nWorld, -normalize(gLightDir)));
+    float3 diffuse = gLightColor * ndl;
+
+    // 3) 앰비언트 + 디퓨즈 합산 후 정점 색상에 변조.
+    float3 lit = (gAmbient + diffuse) * input.color.rgb;
+    return float4(lit, input.color.a);
 }
 
 // =============================================================

@@ -669,3 +669,106 @@ std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 	result.assign(candidates.begin(), candidates.begin() + take);
 	return result;
 }
+
+// ===================== A* 경로 탐색 =====================
+namespace {
+	// world(x,z) → (c,r) 정수 셀 좌표. 그리드 바깥은 (-1,-1).
+	inline void XZToCell(const std::vector<std::string>& grid,
+		float x, float z, int& c, int& r)
+	{
+		const int rows = static_cast<int>(grid.size());
+		const int cols = static_cast<int>(grid[0].size());
+		const float halfX = (cols - 1) * TILE * 0.5f;
+		const float halfZ = (rows - 1) * TILE * 0.5f;
+		c = static_cast<int>(floorf((x + halfX) / TILE + 0.5f));
+		r = static_cast<int>(floorf((z + halfZ) / TILE + 0.5f));
+		if (c < 0 || c >= cols || r < 0 || r >= rows) { c = -1; r = -1; }
+	}
+
+	// (c,r) → 셀 중심 world (x,z).
+	inline void CellToXZ(const std::vector<std::string>& grid,
+		int c, int r, float& x, float& z)
+	{
+		const int rows = static_cast<int>(grid.size());
+		const int cols = static_cast<int>(grid[0].size());
+		const float halfX = (cols - 1) * TILE * 0.5f;
+		const float halfZ = (rows - 1) * TILE * 0.5f;
+		x = c * TILE - halfX;
+		z = r * TILE - halfZ;
+	}
+}
+
+bool ComputeShortestPathXZ(SceneState state,
+	float cx, float cz, float tx, float tz, float fFeetY,
+	std::vector<XMFLOAT2>& outPathXZ)
+{
+	outPathXZ.clear();
+	if (state != SceneState::MAP1 && state != SceneState::MAP2) return false;
+	const std::vector<std::string>& grid =
+		(state == SceneState::MAP1) ? Map1Grid() : Map2Grid();
+	const int rows = static_cast<int>(grid.size());
+	const int cols = static_cast<int>(grid[0].size());
+
+	int sc, sr, tc, tr;
+	XZToCell(grid, cx, cz, sc, sr);
+	XZToCell(grid, tx, tz, tc, tr);
+	if (sc < 0 || tc < 0) return false;
+	if (sc == tc && sr == tr) return false;
+
+	auto idx = [cols](int c, int r) { return r * cols + c; };
+
+	const int total = rows * cols;
+	std::vector<float> g(total, 1e30f);
+	std::vector<int>   parent(total, -1);
+	std::vector<bool>  closed(total, false);
+	using PQE = std::pair<float, int>;  // (f-score, idx)
+	std::priority_queue<PQE, std::vector<PQE>, std::greater<PQE>> open;
+
+	auto heuristic = [&](int c, int r) {
+		return static_cast<float>(abs(c - tc) + abs(r - tr));
+	};
+
+	g[idx(sc, sr)] = 0.0f;
+	open.emplace(heuristic(sc, sr), idx(sc, sr));
+
+	constexpr int d4[4][2] = { {1,0},{-1,0},{0,1},{0,-1} };
+
+	bool bFound = false;
+	while (!open.empty()) {
+		int cur = open.top().second; open.pop();
+		if (closed[cur]) continue;
+		closed[cur] = true;
+		const int cc = cur % cols, cr = cur / cols;
+		if (cc == tc && cr == tr) { bFound = true; break; }
+
+		for (int k = 0; k < 4; ++k) {
+			const int nc = cc + d4[k][0];
+			const int nr = cr + d4[k][1];
+			if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
+			float nx, nz; CellToXZ(grid, nc, nr, nx, nz);
+			if (IsBlockedInGrid(grid, nx, nz, fFeetY)) continue;
+			const float ng = g[cur] + 1.0f;
+			const int nidx = idx(nc, nr);
+			if (ng < g[nidx]) {
+				g[nidx] = ng;
+				parent[nidx] = cur;
+				open.emplace(ng + heuristic(nc, nr), nidx);
+			}
+		}
+	}
+	if (!bFound) return false;
+
+	// 역추적 — 출발 셀 자체는 제외하고 도착 셀부터 거꾸로 push 후 reverse.
+	std::vector<XMFLOAT2> rev;
+	int cur = idx(tc, tr);
+	const int startIdx = idx(sc, sr);
+	while (cur != startIdx && cur != -1) {
+		const int cc = cur % cols, cr = cur / cols;
+		float wx, wz; CellToXZ(grid, cc, cr, wx, wz);
+		rev.emplace_back(wx, wz);
+		cur = parent[cur];
+	}
+	if (cur == -1) return false;
+	outPathXZ.assign(rev.rbegin(), rev.rend());
+	return !outPathXZ.empty();
+}

@@ -15,26 +15,39 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 {
 	ID3D12RootSignature* pd3dGraphicsRootSignature = NULL;
 
-	// ��Ʈ �Ķ����: [0] ���� ��ȯ ��� (32��Ʈ ��� 16��)
-	//                [1] ��/���� ��� (32��Ʈ ��� 32��)
-	D3D12_ROOT_PARAMETER pd3dRootParameters[2];
+	// 루트 파라미터:
+	//   [0] 월드 변환 행렬   (b0, 32비트 상수 16개) — PS 도 face normal 변환에 사용하므로 ALL
+	//   [1] 뷰/투영 행렬     (b1, 32비트 상수 32개) — VS 전용
+	//   [2] 라이트 정보       (b2, 32비트 상수 12개: dir/color/ambient float4 각 1개)  — PS 전용
+	//   [3] face normal 배열 (b3, 32비트 상수 48개: float4 × 12 면)              — PS 전용
+	D3D12_ROOT_PARAMETER pd3dRootParameters[4];
 	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	pd3dRootParameters[0].Constants.Num32BitValues = 16;
 	pd3dRootParameters[0].Constants.ShaderRegister = 0;
 	pd3dRootParameters[0].Constants.RegisterSpace = 0;
-	pd3dRootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	pd3dRootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 	pd3dRootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	pd3dRootParameters[1].Constants.Num32BitValues = 32;
 	pd3dRootParameters[1].Constants.ShaderRegister = 1;
 	pd3dRootParameters[1].Constants.RegisterSpace = 0;
 	pd3dRootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	pd3dRootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	pd3dRootParameters[2].Constants.Num32BitValues = 12;
+	pd3dRootParameters[2].Constants.ShaderRegister = 2;
+	pd3dRootParameters[2].Constants.RegisterSpace = 0;
+	pd3dRootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	pd3dRootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	pd3dRootParameters[3].Constants.Num32BitValues = 48;
+	pd3dRootParameters[3].Constants.ShaderRegister = 3;
+	pd3dRootParameters[3].Constants.RegisterSpace = 0;
+	pd3dRootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+	// PS 가 b0/b2/b3 를 읽으므로 DENY_PIXEL_SHADER_ROOT_ACCESS 는 제거.
 	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 	D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
 	::ZeroMemory(&d3dRootSignatureDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
@@ -224,6 +237,20 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
 	pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
 	pCamera->UpdateShaderVariables(pd3dCommandList);
+
+	// 라이트 정보 (b2) — 매 프레임 1회 업로드.
+	// 방향광 + 앰비언트. 라이트 방향은 정규화된 "빛이 진행하는 방향".
+	{
+		XMFLOAT3 lightDir3{ 0.3f, -0.8f, 0.5f };
+		XMVECTOR ld = XMVector3Normalize(XMLoadFloat3(&lightDir3));
+		XMStoreFloat3(&lightDir3, ld);
+		float lightBuf[12] = {
+			lightDir3.x, lightDir3.y, lightDir3.z, 0.0f,
+			0.95f,       0.90f,       0.80f,       0.0f,  // light color
+			0.25f,       0.25f,       0.30f,       0.0f,  // ambient
+		};
+		pd3dCommandList->SetGraphicsRoot32BitConstants(2, 12, lightBuf, 0);
+	}
 
 	if (m_eCurrentState == SceneState::MAP_SELECT) {
 		// MAP_SELECT ������ ���� �ΰ��� ���� �׸��� �ʰ�, MAP1/MAP2 �� �̴Ͼ�ó�� �׸���.

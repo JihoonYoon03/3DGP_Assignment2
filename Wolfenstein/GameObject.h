@@ -194,4 +194,10 @@ private:
 	bool  m_bJumping          = false;
 	float m_fVerticalVelocity = 0.0f;
 	float m_fJumpCooldown     = 0.0f;
+
+	// A* 경로 캐시 — Pursue 중 LOS 가 막혔을 때 최단 경로를 따라 이동한다.
+	// 0.5초마다 또는 stuck/끝 도달 시 재계산.
+	std::vector<XMFLOAT2> m_vPath;
+	size_t                m_nPathIdx     = 0;
+	float                 m_fRepathTimer = 0.0f;
 };

@@ -63,6 +63,11 @@ public:
 	// 재생성한다. m_fPitch / m_fYaw(궤도 각도)는 변경하지 않으므로 다음 Rotate() 호출이
 	// 올바른 델타로 누적된다.
 	void SetPositionAndTarget(const XMFLOAT3& pos, const XMFLOAT3& target);
+
+	// 숄더뷰 TPS 전용: 위치만 pos 로 옮기고 look/right/up/뷰 행렬은 현재 m_fPitch/m_fYaw
+	// 로 재생성한다. 즉 카메라가 플레이어를 바라보지 않고 자체 시선 방향을 갖는다.
+	// 1인칭과 동일한 pitch 거동을 유지하면서 위치만 어깨로 옮길 때 사용.
+	void SetPositionKeepOrientation(const XMFLOAT3& pos);
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
 
 	void SetViewport(int xTopLeft, int yTopLeft, int nWidth, int nHeight, float fMinZ =	0.0f, float fMaxZ = 1.0f);
