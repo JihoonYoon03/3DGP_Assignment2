@@ -132,3 +132,16 @@ public:
 		XMFLOAT4 xmf4Color = XMFLOAT4(0.95f, 0.25f, 0.30f, 1.0f));
 	virtual ~CLifeBarMesh();
 };
+
+// NDC 좌표 (xL, xR, yT, yB) 를 직접 받아 화면에 직사각형 1개를 그리는 범용 메시.
+// 좌표는 [-1, 1] 범위. yT 가 yB 보다 커야 위쪽이 위로 향한다 (NDC Y는 위가 +).
+// CHudShader 와 함께 사용. 적 잔여 수 점 카운트, "WIN" 글자 세그먼트 등 HUD
+// 정형 사각형이 필요한 모든 곳에 공유되는 유연한 빌딩 블록이다.
+class CHudQuadMesh : public CMesh
+{
+public:
+	CHudQuadMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+		float xL, float xR, float yT, float yB,
+		XMFLOAT4 xmf4Color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
+	virtual ~CHudQuadMesh();
+};

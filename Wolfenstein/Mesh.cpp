@@ -361,3 +361,52 @@ CLifeBarMesh::CLifeBarMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* 
 CLifeBarMesh::~CLifeBarMesh()
 {
 }
+
+
+// ====================================================================================
+// CHudQuadMesh : NDC 좌표를 직접 받는 범용 직사각형
+// ====================================================================================
+CHudQuadMesh::CHudQuadMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+	float xL, float xR, float yT, float yB,
+	XMFLOAT4 xmf4Color)
+	: CMesh(pd3dDevice, pd3dCommandList)
+{
+	// 직사각형 1개 = 정점 4 / 인덱스 6. CLifeBarMesh 와 동일한 패턴이며
+	// 좌표 계산만 호출부에서 미리 끝내는 형태이다.
+	m_nVertices = 4;
+	m_nStride = sizeof(CDiffusedVertex);
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	CDiffusedVertex pVertices[4];
+	pVertices[0] = CDiffusedVertex(XMFLOAT3(xL, yT, 0.0f), xmf4Color); // 좌상
+	pVertices[1] = CDiffusedVertex(XMFLOAT3(xR, yT, 0.0f), xmf4Color); // 우상
+	pVertices[2] = CDiffusedVertex(XMFLOAT3(xR, yB, 0.0f), xmf4Color); // 우하
+	pVertices[3] = CDiffusedVertex(XMFLOAT3(xL, yB, 0.0f), xmf4Color); // 좌하
+
+	m_pd3dVertexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		pVertices, m_nStride * m_nVertices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dVertexUploadBuffer);
+
+	m_d3dVertexBufferView.BufferLocation = m_pd3dVertexBuffer->GetGPUVirtualAddress();
+	m_d3dVertexBufferView.StrideInBytes = m_nStride;
+	m_d3dVertexBufferView.SizeInBytes = m_nStride * m_nVertices;
+
+	m_nIndices = 6;
+	UINT pnIndices[6] = { 0, 1, 2, 0, 2, 3 };
+
+	m_pd3dIndexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		pnIndices, sizeof(UINT) * m_nIndices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER,
+		&m_pd3dIndexUploadBuffer);
+
+	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
+	m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+}
+
+CHudQuadMesh::~CHudQuadMesh()
+{
+}

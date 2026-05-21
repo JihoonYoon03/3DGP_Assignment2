@@ -352,6 +352,19 @@ void CGameFramework::BuildObjects()
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		1.2f, 2.6f, 1.2f, true, XMFLOAT4(0.45f, 0.15f, 0.55f, 1.0f));
 
+	// 소총 메시: 가늘고 긴 직육면체 (어두운 회색). 깊이가 길이 축이며 +Z 방향이 총구.
+	// 깊이는 1.2 로 잡아 FPS 모드에서 카메라 근평면(=1.0) 클리핑을 피할 수 있도록 한다.
+	m_pRifleMesh = std::make_shared<CCubeMeshDiffused>(
+		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+		0.18f, 0.18f, 1.2f, true, XMFLOAT4(0.25f, 0.25f, 0.28f, 1.0f));
+	m_pRifle = std::make_shared<CGameObject>();
+	m_pRifle->SetMesh(m_pRifleMesh);
+
+	// 적 마커 기둥 메시: 가늘고 매우 긴 노란 기둥. 잔여 적 ≤3 일 때 적 머리 위에 표시.
+	m_pEnemyMarkerMesh = std::make_shared<CCubeMeshDiffused>(
+		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+		0.15f, 4.0f, 0.15f, true, XMFLOAT4(1.0f, 0.85f, 0.1f, 1.0f));
+
 	// HUD ���̴� (���ڼ� + ������ �� ����). ���� OFF, �ø� OFF.
 	// CreateShader �� ���� �Լ��̹Ƿ� base �����ͷ� ȣ���ص� CHudShader::CreateShader �� ����ġ�ȴ�.
 	m_pHudShader = std::make_shared<CHudShader>();
@@ -386,6 +399,117 @@ void CGameFramework::BuildObjects()
 		m_pLifeBarSegments.push_back(std::move(pSegObj));
 	}
 
+	// 적 잔여 수 점 카운트 (좌상단). 최대 적 수 10 만큼 미리 생성하고 살아있는 적
+	// 수만큼만 앞에서부터 그린다. CHudQuadMesh 로 NDC 좌표를 직접 지정.
+	{
+		const float kPipSizePx = 14.0f;
+		const float kGapPx     = 6.0f;
+		const float kLeftPx    = 24.0f;
+		const float kTopPx     = 24.0f;
+		const float wPx = float(m_nWndClientWidth  > 0 ? m_nWndClientWidth  : 1);
+		const float hPx = float(m_nWndClientHeight > 0 ? m_nWndClientHeight : 1);
+		const float pipNdcW = kPipSizePx * 2.0f / wPx;
+		const float pipNdcH = kPipSizePx * 2.0f / hPx;
+		const float gapNdc  = kGapPx     * 2.0f / wPx;
+		const float leftNdc = kLeftPx    * 2.0f / wPx;
+		const float topNdc  = kTopPx     * 2.0f / hPx;
+		const float xLBase = -1.0f + leftNdc;
+		const float yT     =  1.0f - topNdc;
+		const float yB     =  yT - pipNdcH;
+
+		m_pCountPips.reserve(10);
+		for (int i = 0; i < 10; ++i) {
+			const float xL = xLBase + float(i) * (pipNdcW + gapNdc);
+			const float xR = xL + pipNdcW;
+			auto pPipMesh = std::make_shared<CHudQuadMesh>(
+				m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+				xL, xR, yT, yB,
+				XMFLOAT4(0.95f, 0.85f, 0.20f, 1.0f));
+			auto pPipObj = std::make_shared<CGameObject>();
+			pPipObj->SetMesh(pPipMesh);
+			pPipObj->SetShader(m_pHudShader);
+			m_pCountPips.push_back(std::move(pPipObj));
+		}
+	}
+
+	// 승리 메시지 "WIN" — 7-세그먼트 스타일로 W/I/N 3 글자를 NDC 박스 조각들로 구성.
+	// 각 글자는 픽셀 단위 폭/높이로 정의한 뒤 NDC 로 환산, 화면 중앙(약간 위쪽)에 배치한다.
+	{
+		const float wPx = float(m_nWndClientWidth  > 0 ? m_nWndClientWidth  : 1);
+		const float hPx = float(m_nWndClientHeight > 0 ? m_nWndClientHeight : 1);
+		const float kLetterW = 80.0f;       // 글자 폭(px)
+		const float kLetterH = 120.0f;      // 글자 높이(px)
+		const float kStroke  = 14.0f;       // 획 두께(px)
+		const float kLetterGap = 30.0f;     // 글자 사이 간격(px)
+		const XMFLOAT4 col(1.0f, 0.85f, 0.20f, 1.0f);
+
+		// 화면 중앙(약간 위쪽) 기준 좌측 시작 x(px).
+		const float totalW = kLetterW * 3.0f + kLetterGap * 2.0f;
+		const float startXPx = (wPx - totalW) * 0.5f;
+		const float topYPx   = hPx * 0.5f - kLetterH * 0.5f - hPx * 0.05f;
+
+		auto pxToNdcX = [&](float px) { return px * 2.0f / wPx - 1.0f; };
+		auto pxToNdcY = [&](float px) { return 1.0f - px * 2.0f / hPx; };
+
+		auto addQuad = [&](float xLpx, float xRpx, float yTpx, float yBpx) {
+			const float xL = pxToNdcX(xLpx);
+			const float xR = pxToNdcX(xRpx);
+			const float yT = pxToNdcY(yTpx);
+			const float yB = pxToNdcY(yBpx);
+			auto pMesh = std::make_shared<CHudQuadMesh>(
+				m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+				xL, xR, yT, yB, col);
+			auto pObj = std::make_shared<CGameObject>();
+			pObj->SetMesh(pMesh);
+			pObj->SetShader(m_pHudShader);
+			m_pWinLetters.push_back(std::move(pObj));
+		};
+
+		// W (4 stroke): 좌세로, 우세로, 좌하 대각 대신 단순 가로 하단 + 가운데 짧은 위 막대.
+		{
+			const float L = startXPx;
+			const float R = L + kLetterW;
+			const float T = topYPx;
+			const float B = topYPx + kLetterH;
+			// 좌 세로
+			addQuad(L, L + kStroke, T, B);
+			// 우 세로
+			addQuad(R - kStroke, R, T, B);
+			// 가운데 짧은 세로 (위쪽으로 1/3)
+			const float midX = (L + R) * 0.5f;
+			addQuad(midX - kStroke * 0.5f, midX + kStroke * 0.5f, B - kLetterH * 0.55f, B);
+			// 하단 가로
+			addQuad(L, R, B - kStroke, B);
+		}
+		// I (3 stroke): 가운데 세로 + 상단 가로 + 하단 가로
+		{
+			const float L = startXPx + kLetterW + kLetterGap;
+			const float R = L + kLetterW;
+			const float T = topYPx;
+			const float B = topYPx + kLetterH;
+			const float midX = (L + R) * 0.5f;
+			// 세로
+			addQuad(midX - kStroke * 0.5f, midX + kStroke * 0.5f, T, B);
+			// 상단 가로
+			addQuad(L + kStroke, R - kStroke, T, T + kStroke);
+			// 하단 가로
+			addQuad(L + kStroke, R - kStroke, B - kStroke, B);
+		}
+		// N (3 stroke): 좌세로 + 우세로 + 대각선 대신 상단 가로 두꺼운 막대로 단순화
+		{
+			const float L = startXPx + (kLetterW + kLetterGap) * 2.0f;
+			const float R = L + kLetterW;
+			const float T = topYPx;
+			const float B = topYPx + kLetterH;
+			// 좌 세로
+			addQuad(L, L + kStroke, T, B);
+			// 우 세로
+			addQuad(R - kStroke, R, T, B);
+			// 상단 대각선 단순화 — 상단 가로 + 우측 끝 살짝 내려오는 짧은 세로 강조
+			addQuad(L, R, T, T + kStroke);
+		}
+	}
+
 	// ������ ���� �ݹ� ���. Scene ���� EnemyBullet �� Player �浹 �� ȣ��ȴ�.
 	if (m_pScene) {
 		m_pScene->SetOnPlayerHit([this]() {
@@ -410,6 +534,14 @@ void CGameFramework::BuildObjects()
 	if (m_pCrosshair) m_pCrosshair->ReleaseUploadBuffers();
 	for (auto& pSeg : m_pLifeBarSegments) {
 		if (pSeg) pSeg->ReleaseUploadBuffers();
+	}
+	if (m_pRifleMesh) m_pRifleMesh->ReleaseUploadBuffers();
+	if (m_pEnemyMarkerMesh) m_pEnemyMarkerMesh->ReleaseUploadBuffers();
+	for (auto& pPip : m_pCountPips) {
+		if (pPip) pPip->ReleaseUploadBuffers();
+	}
+	for (auto& pLetter : m_pWinLetters) {
+		if (pLetter) pLetter->ReleaseUploadBuffers();
 	}
 
 	m_GameTimer.Reset();
@@ -709,28 +841,35 @@ void CGameFramework::ProcessInput()
 		// TPS: 어깨 너머(over-the-shoulder) 카메라.
 		// 카메라의 yaw/pitch 방향은 Rotate() 에서 이미 FPS 와 동일하게 갱신되므로
 		// look 벡터가 곳 조준점 방향이다. 위치만 플레이어 뒤로 오프셋한다.
-		// 높이는 pitch 에 무관하게 플레이어 기준 고정값으로 유지해 자연스러운 어깨 시점 확보.
-		const float kBack     = 5.0f;   // 수평 후퇴 거리
-		const float kUp       = 1.0f;   // 플레이어 기준 위쪽 오프셋 (머리 높이)
-		const float kShoulder = 1.2f;   // 오른쪽 어깨 너머 수평 오프셋
+		// TPS 구면 궤도: yaw=수평, pitch=수직 궤도 각도. 카메라는 항상 플레이어를
+		// 중심으로 공전하며 플레이어를 바라본다(화면 중앙 고정). 총알 방향은 별도로
+		// yaw/pitch 에서 조준 벡터를 계산해 화면 조준선과 일치시킨다(FireBullet 참고).
+		const float kBack = 7.0f;   // 플레이어 ↔ 카메라 궤도 반지름
+		const float kUp   = 1.5f;   // 추가 수직 오프셋 (머리 위 약간)
 
-		const float yaw = m_pCamera->GetYaw();
-		// 수평 후방 / 우방 단위 벡터 (pitch 무관, 순수 yaw 기반)
-		const XMFLOAT3 backHoriz{  -sinf(yaw), 0.0f, -cosf(yaw) };
-		const XMFLOAT3 rightHoriz{  cosf(yaw), 0.0f, -sinf(yaw) };
+		const float yaw   = m_pCamera->GetYaw();
+		const float pitch = m_pCamera->GetPitch();
 
-		// 후방 거리가 벽에 닿으면 클램프 (수평만)
-		const float safeDist = ClampDistanceAgainstWalls(
-			state, m_xmf3PlayerPos, backHoriz, kBack,
-			m_xmf3PlayerPos.y + kUp);
+		// 수평 후방 단위 벡터 (벽 클램프 대상). pitch 와 무관하게 yaw 만 사용.
+		const XMFLOAT3 backDir{ -sinf(yaw), 0.0f, -cosf(yaw) };
+
+		// 구면 궤도 분해 — 수평 성분(반지름 * cos pitch), 수직 성분(반지름 * sin pitch).
+		const float horizBack = kBack * cosf(pitch);
+		const float vertBack  = kBack * sinf(pitch);
+		const float eyeY      = m_xmf3PlayerPos.y + vertBack + kUp;
+
+		// 카메라-플레이어 사이 벽이 있으면 수평 거리를 클램프해 카메라 관통을 막는다.
+		const float dist = ClampDistanceAgainstWalls(
+			state, m_xmf3PlayerPos, backDir, horizBack, eyeY);
 
 		XMFLOAT3 tpsEye{
-			m_xmf3PlayerPos.x + backHoriz.x * safeDist + rightHoriz.x * kShoulder,
-			m_xmf3PlayerPos.y + kUp,
-			m_xmf3PlayerPos.z + backHoriz.z * safeDist + rightHoriz.z * kShoulder };
+			m_xmf3PlayerPos.x + backDir.x * dist,
+			eyeY,
+			m_xmf3PlayerPos.z + backDir.z * dist };
 
-		// look 방향(yaw/pitch)은 Rotate() 로 보존됨 — SetPosition 만 적용.
-		m_pCamera->SetPosition(tpsEye);
+		// 카메라는 항상 플레이어를 바라본다. m_fPitch / m_fYaw 는 궤도 각도로 그대로
+		// 유지되므로 다음 Rotate() 가 자연스럽게 누적된다 (SetPositionAndTarget 보장).
+		m_pCamera->SetPositionAndTarget(tpsEye, m_xmf3PlayerPos);
 
 		if (m_pPlayerModel) {
 			XMFLOAT3 modelCenter{
@@ -741,9 +880,51 @@ void CGameFramework::ProcessInput()
 		}
 	}
 
-	// ���ڼ��� NDC ������ �״�� ����ϴ� CCrosshairMesh + CHudShader ��������
-	// �׷����Ƿ� ������ ��ġ/ȸ�� ������ �ʿ� ����. FrameAdvance �� Render �ܰ迡��
-	// �������� �� �� ȣ��Ǹ� �׻� ȭ�� ���߾ӿ� ȸ�� ���� ǥ�õȴ�.
+	// 카메라 위치/look 이 확정되었으므로 소총 transform 도 동기화한다.
+	UpdateRifleTransform();
+}
+
+void CGameFramework::UpdateRifleTransform()
+{
+	if (!m_pRifle || !m_pCamera) return;
+	if (!m_pScene) return;
+	const SceneState st = m_pScene->GetCurrentState();
+	if (st != SceneState::MAP1 && st != SceneState::MAP2) return;
+
+	const float yaw   = m_pCamera->GetYaw();
+	const float pitch = m_pCamera->GetPitch();
+	// 조준선 방향 — 메시의 +Z 축이 향할 방향.
+	const float cp = cosf(pitch);
+	const XMFLOAT3 aim{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
+
+	XMFLOAT3 pos;
+	XMFLOAT3 fwd;
+
+	if (m_pCamera->GetMode() == ECameraMode::FPS) {
+		// FPS: 카메라 기준 우측 하단(어깨총처럼 화면 한쪽에 보이도록).
+		// 근평면(=1.0) 클리핑 방지를 위해 소총 중심을 카메라 1.7 단위 전방에 둔다
+		// (소총 깊이 1.2 / 2 = 0.6, 1.7 - 0.6 = 1.1 > 1.0 근평면).
+		const XMFLOAT3 camPos   = m_pCamera->GetPosition();
+		const XMFLOAT3 camRight = m_pCamera->GetRight();
+		const float kForward = 1.7f;
+		const float kSide    = 0.45f;
+		const float kDown    = 0.35f;
+		pos.x = camPos.x + camRight.x * kSide + aim.x * kForward;
+		pos.y = camPos.y - kDown              + aim.y * kForward;
+		pos.z = camPos.z + camRight.z * kSide + aim.z * kForward;
+		fwd = aim;
+	}
+	else {
+		// TPS: 플레이어 모델 오른쪽 어깨 옆. 메시 중심 높이는 modelCenter 와 동일.
+		const XMFLOAT3 playerYawRight{ cosf(yaw), 0.0f, -sinf(yaw) };
+		const float modelCenterY = m_xmf3PlayerPos.y - MAP_EYE_HEIGHT + 1.3f;
+		pos.x = m_xmf3PlayerPos.x + playerYawRight.x * 0.85f + sinf(yaw) * 0.4f;
+		pos.y = modelCenterY;
+		pos.z = m_xmf3PlayerPos.z + playerYawRight.z * 0.85f + cosf(yaw) * 0.4f;
+		fwd = aim;
+	}
+
+	m_pRifle->SetWorldOrientation(fwd, pos);
 }
 
 void CGameFramework::FireBullet()
@@ -753,16 +934,35 @@ void CGameFramework::FireBullet()
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
 	if (m_fFireCooldown > 0.0f) return;
 
+	// 조준 방향(=조준선 방향): 카메라 모드와 무관하게 yaw/pitch 로부터 계산한다.
+	// FPS 에선 m_pCamera->GetLook() 과 동일. TPS 에선 카메라가 플레이어를 바라보므로
+	// GetLook() 을 그대로 쓸 수 없다 — 이 식이 정답.
+	const float yaw   = m_pCamera->GetYaw();
+	const float pitch = m_pCamera->GetPitch();
+	const float cp = cosf(pitch);
+	const XMFLOAT3 aim{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
 
-// FPS/TPS 구분 없이 카메라 look 벡터를 발사 방향으로 사용한다.
-	// TPS 가 어깨 너머 방식으로 바뀌면서 look 벡터가 조준점과 일치하게 되었다.
-	const XMFLOAT3 look = m_pCamera->GetLook();
-	XMFLOAT3 origin{
-		m_xmf3PlayerPos.x + look.x * 0.8f,
-		m_xmf3PlayerPos.y + 0.2f,
-		m_xmf3PlayerPos.z + look.z * 0.8f };
+	// 발사 원점: 소총 총구. 소총 transform 은 UpdateRifleTransform 이 매 프레임 갱신한다.
+	// 소총이 아직 준비되지 않았다면 플레이어 머리 앞쪽으로 폴백.
+	XMFLOAT3 origin;
+	if (m_pRifle) {
+		const XMFLOAT3 rpos = m_pRifle->GetPosition();
+		const XMFLOAT3 rfwd = m_pRifle->GetLook(); // SetWorldOrientation 에서 _31..33 = forward
+		const float kMuzzle = 0.7f; // 소총 깊이 1.2 의 절반(0.6) + 약간 (총알이 메시 외부에서 시작하도록)
+		origin = XMFLOAT3{
+			rpos.x + rfwd.x * kMuzzle,
+			rpos.y + rfwd.y * kMuzzle,
+			rpos.z + rfwd.z * kMuzzle };
+	}
+	else {
+		origin = XMFLOAT3{
+			m_xmf3PlayerPos.x + aim.x * 0.8f,
+			m_xmf3PlayerPos.y + 0.2f,
+			m_xmf3PlayerPos.z + aim.z * 0.8f };
+	}
+
 	const float kBulletSpeed = 50.0f;
-	auto pBullet = std::make_shared<CBulletObject>(origin, look, kBulletSpeed, EObjectTag::Bullet);
+	auto pBullet = std::make_shared<CBulletObject>(origin, aim, kBulletSpeed, EObjectTag::Bullet);
 	pBullet->SetMesh(m_pBulletMesh);
 	pBullet->SetSceneState(state);
 	m_pScene->AddObjectToCurrentMap(pBullet);
@@ -808,6 +1008,10 @@ void CGameFramework::SpawnEnemiesForMap(SceneState state)
 		pEnemy->SetPlayerPosGetter([this]() {
 			return m_xmf3PlayerPos;
 		});
+		// 머리 위 마커 메시 주입. 가시성은 AnimateObjects 가 잔여 적 수에 따라 토글한다.
+		if (m_pEnemyMarkerMesh) {
+			pEnemy->SetMarkerMesh(m_pEnemyMarkerMesh);
+		}
 		m_pScene->AddObjectToCurrentMap(pEnemy);
 	}
 }
@@ -816,6 +1020,30 @@ void CGameFramework::AnimateObjects()
 {
 	if (!m_pScene) return;
 	m_pScene->AnimateObjects(m_GameTimer.GetTimeElapsed());
+
+	// 게임플레이 맵에서만: 적 수 카운트 → 마커 토글 + 승리 타이머 처리.
+	{
+		const SceneState curState = m_pScene->GetCurrentState();
+		if (curState == SceneState::MAP1 || curState == SceneState::MAP2) {
+			const int nAlive = m_pScene->CountAliveEnemies();
+
+			// 마커: 잔여 1~3 마리일 때만 표시. 0 이거나 4+ 면 숨김.
+			m_pScene->SetEnemyMarkersVisible(nAlive > 0 && nAlive <= 3);
+
+			// 승리 타이머: 적 0 마리이고 아직 카운트다운 중이 아니면 시작.
+			if (nAlive == 0 && m_fVictoryTimer < 0.0f) {
+				m_fVictoryTimer = 2.0f;
+			}
+			// 카운트다운이 활성이면 매 프레임 감소. 0 도달 시 LANDING 복귀 트리거.
+			if (m_fVictoryTimer >= 0.0f) {
+				m_fVictoryTimer -= m_GameTimer.GetTimeElapsed();
+				if (m_fVictoryTimer <= 0.0f) {
+					m_fVictoryTimer = -1.0f;
+					m_bResetPending = true;
+				}
+			}
+		}
+	}
 
 	// ???? ????? GAME START ????? ?????? ?? ???? ???(MAP_SELECT) ???? ???.
 	if (m_pScene->IsGameStartRequested() && m_pScene->GetCurrentState() == SceneState::LANDING) {
@@ -843,6 +1071,8 @@ void CGameFramework::AnimateObjects()
 		m_bResetPending = false;
 		m_pScene->ResetGameplayState();
 		m_nPlayerLife = 10;
+		// 방어적으로 승리 타이머도 초기화 (정상 흐름은 이미 -1, 사망 reset 경로 대비).
+		m_fVictoryTimer = -1.0f;
 		m_pScene->TransitionToScene(SceneState::LANDING);
 		// ���콺 ĸó / �߻� ��ٿ� / ���� ���� �ʱ�ȭ ? ���� ���ӿ��� �����ϰ� ����.
 		if (m_bMouseCaptured) {
@@ -895,6 +1125,8 @@ void CGameFramework::SetupGameCamera(SceneState state)
 	// �װ� �ٽ� �����ϴ� �帧�� ù ���� ���� �帧�� �����ϰ� �����Ѵ�.
 	m_nPlayerLife = 10;
 	m_bResetPending = false;
+	// 승리 타이머 초기화 — 새 게임 시작 시 카운트다운/메시지 잔여 상태 정리.
+	m_fVictoryTimer = -1.0f;
 	if (m_pScene) m_pScene->ResetGameplayState();
 	SpawnEnemiesForMap(state);
 
@@ -1012,6 +1244,17 @@ void CGameFramework::FrameAdvance()
 	// ?? ??????.
 	if (m_pScene) m_pScene->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 
+	// 소총: 게임플레이 맵에서 FPS/TPS 양쪽 모두 표시. Scene::Render 직후이므로
+	// CObjectsShader 의 PSO 가 그대로 바인딩되어 있어 별도 PSO 전환 없이 동일 파이프
+	// 라인으로 그릴 수 있다. 소총 GameObject 는 shader 미할당이지만 m_xmf4x4World 만
+	// 바인딩되면 충분하다.
+	if (m_pRifle && m_pScene && m_pCamera) {
+		const SceneState st = m_pScene->GetCurrentState();
+		if (st == SceneState::MAP1 || st == SceneState::MAP2) {
+			m_pRifle->Render(m_pd3dCommandList.Get(), m_pCamera.get());
+		}
+	}
+
 	// ���ڼ��� ���� �÷��� ��(MAP1/MAP2)������ �׸���.
 	// CGameObject::Render �� CHudShader �� PSO �� ��ȯ�� �� �޽ø� �׸��Ƿ�
 	// ���� �׽�Ʈ�� ���� �־� �׻� �ٸ� ��� �ȼ� ���� ǥ�õȴ�.
@@ -1026,6 +1269,23 @@ void CGameFramework::FrameAdvance()
 			for (int i = 0; i < nDraw && i < static_cast<int>(m_pLifeBarSegments.size()); ++i) {
 				if (m_pLifeBarSegments[i]) {
 					m_pLifeBarSegments[i]->Render(m_pd3dCommandList.Get(), m_pCamera.get());
+				}
+			}
+
+			// 적 잔여 수 점 카운트(좌상단). 살아있는 적 수만큼만 앞에서부터 그린다.
+			const int nAlive = m_pScene->CountAliveEnemies();
+			const int nDrawPips = (nAlive < 0) ? 0
+				: (nAlive > static_cast<int>(m_pCountPips.size()) ? static_cast<int>(m_pCountPips.size()) : nAlive);
+			for (int i = 0; i < nDrawPips; ++i) {
+				if (m_pCountPips[i]) {
+					m_pCountPips[i]->Render(m_pd3dCommandList.Get(), m_pCamera.get());
+				}
+			}
+
+			// 승리 메시지 — 타이머가 활성일 때만 화면 중앙에 "WIN" 표시.
+			if (m_fVictoryTimer >= 0.0f) {
+				for (auto& pLetter : m_pWinLetters) {
+					if (pLetter) pLetter->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 				}
 			}
 		}
