@@ -63,6 +63,11 @@ public:
 	// 현재 맵에 적을 PickEnemySpawnPositions 결과만큼 스폰한다.
 	void SpawnEnemiesForMap(SceneState state);
 
+	// 매 프레임 소총의 월드 행렬을 카메라 모드(FPS/TPS)에 맞게 갱신한다.
+	// FPS: 카메라 우측 하단(어깨총처럼 화면 한쪽에 보이도록).
+	// TPS: 플레이어 모델 우측 어깨 옆, 조준선(aim) 방향 정렬.
+	void UpdateRifleTransform();
+
 	void MoveToNextFrame();
 
 	std::unique_ptr<class CCamera> m_pCamera;
@@ -185,4 +190,27 @@ private:
 	std::vector<std::shared_ptr<CGameObject>> m_pLifeBarSegments;
 	int  m_nPlayerLife = 10;
 	bool m_bResetPending = false;
+
+	// === 소총 ===
+	// 플레이어가 들고 있는 가늘고 긴 직육면체. FPS 에선 화면 우측 하단, TPS 에선
+	// 플레이어 모델 오른쪽 어깨 옆에 정렬된다. 총알은 이 소총의 총구에서 발사된다.
+	std::shared_ptr<CMesh>      m_pRifleMesh;
+	std::shared_ptr<CGameObject> m_pRifle;
+
+	// === 적 잔여 수 점 카운트(좌상단) ===
+	// SpawnEnemiesForMap 이 만드는 최대 적 수(10) 만큼 점을 미리 생성하고
+	// 살아있는 적 수만큼만 앞에서부터 그린다. 라이프 바와 동일한 패턴.
+	std::vector<std::shared_ptr<CGameObject>> m_pCountPips;
+
+	// === 적 마커 기둥 ===
+	// 잔여 적 수 ≤ 3 일 때 활성화되어 적 머리 위에 따라다니는 노란 기둥.
+	// 메시는 GameFramework 가 소유하고 SpawnEnemiesForMap 에서 각 적에 주입한다.
+	std::shared_ptr<CMesh> m_pEnemyMarkerMesh;
+
+	// === 승리 처리 ===
+	// 모든 적 처치 시 화면 중앙에 "WIN" 글자(여러 CHudQuadMesh 세그먼트) 표시.
+	// m_fVictoryTimer: ≥0 카운트다운 중. 0 도달 시 m_bResetPending 으로 LANDING 복귀.
+	// -1.0f 는 비활성 상태.
+	std::vector<std::shared_ptr<CGameObject>> m_pWinLetters;
+	float m_fVictoryTimer = -1.0f;
 };

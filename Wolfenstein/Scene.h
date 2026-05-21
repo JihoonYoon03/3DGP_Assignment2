@@ -76,6 +76,14 @@ public:
 	// 정적 미로 기하 자체는 보존한다.
 	void ResetGameplayState();
 
+	// 현재 활성 맵(MAP1/MAP2)에서 살아있는 적(EObjectTag::Enemy && IsAlive()) 의
+	// 수를 반환한다. 게임플레이 맵이 아니면 0.
+	int CountAliveEnemies() const;
+
+	// 현재 맵의 모든 적 CEnemyObject 에 마커 가시성을 일괄 설정한다.
+	// 적 ≤3 마리일 때 GameFramework 가 true 로 호출해 머리 위 노란 기둥을 표시한다.
+	void SetEnemyMarkersVisible(bool bVisible);
+
 	std::shared_ptr<CButtonObject> m_pStartButton;
 	bool m_bGameStartRequested = false;
 

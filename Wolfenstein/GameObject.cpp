@@ -168,6 +168,33 @@ void CGameObject::SetWorldYawAndPosition(float fYaw, const XMFLOAT3& xmf3Positio
 	XMStoreFloat4x4(&m_xmf4x4World, XMMatrixMultiply(mRot, mTr));
 }
 
+void CGameObject::SetWorldOrientation(const XMFLOAT3& xmf3Forward, const XMFLOAT3& xmf3Position)
+{
+	// row-major: 1행 = right, 2행 = up, 3행 = forward, 4행 = position
+	XMVECTOR vFwd = XMVector3Normalize(XMLoadFloat3(&xmf3Forward));
+
+	// world-up 후보. forward 가 +Y 또는 -Y 와 거의 평행하면 +Z 를 보조 up 으로 사용.
+	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+	if (fabsf(XMVectorGetX(XMVector3Dot(vFwd, vWorldUp))) > 0.99f) {
+		vWorldUp = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+	}
+	XMVECTOR vRight = XMVector3Normalize(XMVector3Cross(vWorldUp, vFwd));
+	XMVECTOR vUp    = XMVector3Normalize(XMVector3Cross(vFwd, vRight));
+
+	XMFLOAT3 r, u, f;
+	XMStoreFloat3(&r, vRight);
+	XMStoreFloat3(&u, vUp);
+	XMStoreFloat3(&f, vFwd);
+
+	m_xmf4x4World._11 = r.x; m_xmf4x4World._12 = r.y; m_xmf4x4World._13 = r.z; m_xmf4x4World._14 = 0.0f;
+	m_xmf4x4World._21 = u.x; m_xmf4x4World._22 = u.y; m_xmf4x4World._23 = u.z; m_xmf4x4World._24 = 0.0f;
+	m_xmf4x4World._31 = f.x; m_xmf4x4World._32 = f.y; m_xmf4x4World._33 = f.z; m_xmf4x4World._34 = 0.0f;
+	m_xmf4x4World._41 = xmf3Position.x;
+	m_xmf4x4World._42 = xmf3Position.y;
+	m_xmf4x4World._43 = xmf3Position.z;
+	m_xmf4x4World._44 = 1.0f;
+}
+
 // ==========================================================================
 // ==========================================================================
 CRotatingObject::CRotatingObject()
@@ -525,6 +552,15 @@ void CEnemyObject::Animate(float fTimeElapsed)
 		break;
 	}
 	}
+
+	// 머리 위 마커 기둥 위치 동기화. 가시 여부와 무관하게 매 프레임 갱신해
+	// 토글 시 즉시 올바른 위치에 나타나도록 한다. (Animate 마지막에 GetPosition()
+	// 으로 최신 좌표를 읽은 뒤 마커 중심을 머리보다 살짝 위로 끌어올린다)
+	if (m_pMarker) {
+		XMFLOAT3 markerPos = GetPosition();
+		markerPos.y += m_xmf3AABBHalf.y + 2.0f; // 적 머리 위 + 마커 절반 높이
+		m_pMarker->SetPosition(markerPos);
+	}
 }
 
 void CEnemyObject::OnHit(CGameObject* /*pOther*/)
@@ -535,4 +571,12 @@ void CEnemyObject::OnHit(CGameObject* /*pOther*/)
 	if (m_nHP <= 0) {
 		Kill();
 	}
+}
+
+void CEnemyObject::SetMarkerMesh(std::shared_ptr<CMesh> pMesh)
+{
+	// 마커는 적과 별도의 CGameObject — Animate 에서 위치만 적 머리 위로 동기화.
+	// 가시성은 m_bMarkerVisible 플래그로 토글되며 Scene::Render 가 분기 처리.
+	m_pMarker = std::make_shared<CGameObject>();
+	m_pMarker->SetMesh(std::move(pMesh));
 }

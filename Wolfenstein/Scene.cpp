@@ -209,6 +209,32 @@ void CScene::ResetGameplayState()
 	}
 }
 
+int CScene::CountAliveEnemies() const
+{
+	if (m_eCurrentState != SceneState::MAP1 && m_eCurrentState != SceneState::MAP2) return 0;
+	const size_t idx = static_cast<size_t>(m_eCurrentState);
+	if (idx >= m_vShaders.size()) return 0;
+	int n = 0;
+	for (const auto& p : m_vShaders[idx].GetObjects()) {
+		if (p && p->IsAlive() && p->GetTag() == EObjectTag::Enemy) ++n;
+	}
+	return n;
+}
+
+void CScene::SetEnemyMarkersVisible(bool bVisible)
+{
+	if (m_eCurrentState != SceneState::MAP1 && m_eCurrentState != SceneState::MAP2) return;
+	const size_t idx = static_cast<size_t>(m_eCurrentState);
+	if (idx >= m_vShaders.size()) return;
+	for (auto& p : m_vShaders[idx].GetObjects()) {
+		if (!p || !p->IsAlive()) continue;
+		if (p->GetTag() != EObjectTag::Enemy) continue;
+		// EObjectTag::Enemy 는 항상 CEnemyObject 인스턴스다 — SpawnEnemiesForMap 에서만 생성.
+		auto* pEnemy = static_cast<CEnemyObject*>(p.get());
+		pEnemy->SetMarkerVisible(bVisible);
+	}
+}
+
 namespace {
 	// MAP_SELECT ȭ�鿡�� �� ���� �� �̴Ͼ�ó�� �¿�� ��ġ�� �� ����ϴ� �����.
 	constexpr float kMiniOffsetX = 28.0f;       // �¿� �߽����κ����� X ������
@@ -277,6 +303,20 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	if (m_bPlayerVisible && m_pPlayerModel &&
 		(m_eCurrentState == SceneState::MAP1 || m_eCurrentState == SceneState::MAP2)) {
 		m_pPlayerModel->Render(pd3dCommandList, pCamera);
+	}
+
+	// 잔여 적 ≤3 마리 모드일 때, 살아있는 적의 머리 위 마커 기둥을 추가 렌더한다.
+	// CObjectsShader 의 PSO 가 그대로 바인딩되어 있어 동일 파이프라인으로 그릴 수 있다.
+	if ((m_eCurrentState == SceneState::MAP1 || m_eCurrentState == SceneState::MAP2)
+		&& idx < m_vShaders.size()) {
+		for (auto& p : m_vShaders[idx].GetObjects()) {
+			if (!p || !p->IsAlive()) continue;
+			if (p->GetTag() != EObjectTag::Enemy) continue;
+			auto* pEnemy = static_cast<CEnemyObject*>(p.get());
+			if (!pEnemy->IsMarkerVisible()) continue;
+			CGameObject* pMarker = pEnemy->GetMarker();
+			if (pMarker) pMarker->Render(pd3dCommandList, pCamera);
+		}
 	}
 }
 

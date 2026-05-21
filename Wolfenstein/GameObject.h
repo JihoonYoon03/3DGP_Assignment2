@@ -70,6 +70,12 @@ public:
 	// match the camera's yaw instead of staying axis-aligned.
 	void SetWorldYawAndPosition(float fYaw, const XMFLOAT3& xmf3Position);
 
+	// forward 벡터(메시의 +Z 가 향할 방향) 와 위치로 월드 행렬을 직접 구성한다.
+	// right = normalize(worldUp × forward), up = normalize(forward × right).
+	// forward 가 world-up 과 거의 평행하면 보조 up 으로 +Z 를 사용한다.
+	// 소총 모델을 카메라/플레이어와 무관하게 임의 방향으로 정렬하는 용도.
+	void SetWorldOrientation(const XMFLOAT3& xmf3Forward, const XMFLOAT3& xmf3Position);
+
 	// ---- Collision tag / AABB ----
 	// Tag drives which type-pair the generalized collision helper considers
 	// this object for. AABB half-extents are in world units around the
@@ -167,6 +173,16 @@ public:
 	void SetFireCallback(std::function<void(const XMFLOAT3&, const XMFLOAT3&)> fn) { m_fnFire = std::move(fn); }
 	void SetPlayerPosGetter(std::function<XMFLOAT3()> fn) { m_fnGetPlayer = std::move(fn); }
 
+	// 적 머리 위 마커 기둥의 메시를 주입한다. SpawnEnemiesForMap 에서 호출.
+	// 내부에서 m_pMarker(CGameObject) 를 생성하고 메시를 부착한다.
+	void SetMarkerMesh(std::shared_ptr<CMesh> pMesh);
+
+	// 마커 가시성 토글. Scene::SetEnemyMarkersVisible 이 잔여 적 ≤3 일 때 true 로 설정.
+	void SetMarkerVisible(bool b) { m_bMarkerVisible = b; }
+	bool IsMarkerVisible() const { return m_bMarkerVisible; }
+	// Scene::Render 가 살아있는 적 별로 마커를 추가 렌더할 수 있도록 raw 포인터 노출.
+	CGameObject* GetMarker() const { return m_pMarker.get(); }
+
 private:
 	EEnemyAIState m_eAIState;
 	float         m_fStateTimer;     // 현재 상태 남은 시간(초)
@@ -200,4 +216,9 @@ private:
 	size_t                m_nPathIndex  = 0; // 현재 향하고 있는 웨이포인트 인덱스
 	float                 m_fPathTimer  = 0.0f; // 경로 재계산 타이머
 	static constexpr float kPathRecalcInterval = 0.5f;
+
+	// 머리 위 마커 기둥. SetMarkerMesh 호출 시 생성되며, Animate 가 매 프레임 위치를
+	// 적 머리 위로 동기화한다. 가시성은 m_bMarkerVisible 에 따라 Scene::Render 가 결정.
+	std::shared_ptr<CGameObject> m_pMarker;
+	bool                         m_bMarkerVisible = false;
 };
