@@ -28,8 +28,13 @@ constexpr float MAP_EYE_HEIGHT = 3.5f;
 MapInfo GetMap1Info();
 MapInfo GetMap2Info();
 
-// Scene.h ���� ��ȯ ������ ���ϱ� ���� ���� ����.
+// Scene.h 간접 순환 의존성을 피하기 위한 전방 선언.
 enum class SceneState : int;
+
+// 그리드 한 셀의 월드 크기 (Maps.cpp 내 TILE 상수와 동일).
+// A* 경유 거리 판정 등에 외부에서 사용한다.
+// (헤더에 정의되지만 constexpr float 는 내부 링키지를 가져 ODR 위반 없음)
+static constexpr float MAP_TILE_SIZE = 4.0f;
 
 // ���� ���� (x,z) ���� �÷��̾��� �� ����(fFeetY)�� �������� �̵��� �������� �����Ѵ�.
 // ���� �ٱ��̳� W(��), �ʹ� ���� ���� ��� �������� ó���Ѵ�.
@@ -58,3 +63,14 @@ bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY);
 // 그대로 적의 위치로 사용 가능하다.
 std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 	XMFLOAT3 xmf3PlayerStart, int nMax, float fHalfBodyY = 1.3f);
+
+// A* 알고리즘으로 start 에서 goal 까지 그리드 셀 중심 경유 경로를 반환한다.
+// 반환 벡터는 start 셀 제외 + goal 셀 포함 순서로 정렬된 월드 좌표 목록이다.
+// 도달 불가 시 빈 벡터를 반환한다. nMaxNodes 로 탐색 상한을 제한해 비용 폭주 방지.
+// 'W' 셀만 불통으로 처리하고 단차('1'~'3')는 통과 가능 취급한다
+// (실제 이동 시 TryMoveXZ 의 점프 메커니즘이 단차를 처리함).
+std::vector<XMFLOAT3> FindPathAStar(
+	SceneState state,
+	const XMFLOAT3& start,
+	const XMFLOAT3& goal,
+	int nMaxNodes = 1024);

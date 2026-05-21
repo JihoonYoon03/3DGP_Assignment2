@@ -217,6 +217,22 @@ CTextLetterMesh::CTextLetterMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
 	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+
+	// 라이팅 셰이더(VSDiffused)가 NORMAL slot 1 입력을 요구하므로 텍스트 정점도
+	// 병렬 노멀 버퍼를 가져야 한다. 텍스트는 평면 글리프이고 시각적으로 항상
+	// 가독성 있게 보여야 하므로, 노멀을 +Y(위쪽)로 설정해 디퓨즈 조명에서
+	// 거의 최대 밝기에 가깝게 유지한다 (현재 라이트 방향 (-0.4,-1.0,-0.3) 기준).
+	std::vector<CNormalVertex> vNormals(m_nVertices, CNormalVertex(0.0f, 1.0f, 0.0f));
+	const UINT normalStride = sizeof(CNormalVertex);
+	m_pd3dNormalBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		vNormals.data(), normalStride * m_nVertices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		m_pd3dNormalUploadBuffer.GetAddressOf());
+	m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+	m_d3dNormalBufferView.StrideInBytes  = normalStride;
+	m_d3dNormalBufferView.SizeInBytes    = normalStride * m_nVertices;
+	m_bHasNormals = true;
 }
 
 CTextLetterMesh::~CTextLetterMesh() {

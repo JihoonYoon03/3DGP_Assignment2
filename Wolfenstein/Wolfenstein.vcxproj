@@ -169,6 +169,13 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Shaders.hlsl">
+      <!-- Shaders.hlsl 은 Shader.cpp 에서 D3DCompileFromFile 으로 런타임 컴파일되므로
+           빌드 시 FxCompile 단계는 불필요하다. 또한 셰이더 모델/타입(VS+PS 혼합)이
+           단일 항목으로 표현되지 않으므로 빌드에서 제외(ExcludedFromBuild)한다. -->
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">VSDiffused</EntryPointName>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">5.1</ShaderModel>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">VSDiffused</EntryPointName>

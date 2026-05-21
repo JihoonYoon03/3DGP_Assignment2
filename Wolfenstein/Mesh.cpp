@@ -22,6 +22,10 @@ void CMesh::ReleaseUploadBuffers()
 
 	if (m_pd3dIndexUploadBuffer)
 		m_pd3dIndexUploadBuffer.Reset();
+
+	// 노멀 업로드 버퍼(존재 시) 해제
+	if (m_pd3dNormalUploadBuffer)
+		m_pd3dNormalUploadBuffer.Reset();
 };
 
 void CMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList)
@@ -29,8 +33,13 @@ void CMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 	// 메쉬의 프리미티브 유형을 설정한다.
 	pd3dCommandList->IASetPrimitiveTopology(m_d3dPrimitiveTopology);
 
-	// 메쉬의 정점 버퍼 뷰를 설정한다.
+	// 위치/색 정점 버퍼(slot 0) 바인딩.
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 1, &m_d3dVertexBufferView);
+
+	// 노멀이 있으면 slot 1 에 추가 바인딩 (라이팅 셰이더용).
+	if (m_bHasNormals) {
+		pd3dCommandList->IASetVertexBuffers(1, 1, &m_d3dNormalBufferView);
+	}
 
 	// 인덱스 버퍼가 있으면 파이프라인에 연결하고 렌더링
 	if (m_pd3dIndexBuffer) {
@@ -169,6 +178,33 @@ CCubeMeshDiffused::CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
 	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
+
+	// 노멀 병렬 버퍼 생성 (slot 1).
+	// 8 정점 큐브에서 각 정점의 노멀은 인접 면 평균 = 큐브 중심에서 정점 위치로 향하는
+	// 단위 벡터로 계산한다. 결과적으로 (+-1, +-1, +-1)/sqrt(3) 으로 정규화된 8 개 노멀.
+	CNormalVertex pNormals[8];
+	const float kInvSqrt3 = 1.0f / sqrtf(3.0f);
+	pNormals[0] = CNormalVertex(-kInvSqrt3, +kInvSqrt3, -kInvSqrt3);
+	pNormals[1] = CNormalVertex(+kInvSqrt3, +kInvSqrt3, -kInvSqrt3);
+	pNormals[2] = CNormalVertex(+kInvSqrt3, +kInvSqrt3, +kInvSqrt3);
+	pNormals[3] = CNormalVertex(-kInvSqrt3, +kInvSqrt3, +kInvSqrt3);
+	pNormals[4] = CNormalVertex(-kInvSqrt3, -kInvSqrt3, -kInvSqrt3);
+	pNormals[5] = CNormalVertex(+kInvSqrt3, -kInvSqrt3, -kInvSqrt3);
+	pNormals[6] = CNormalVertex(+kInvSqrt3, -kInvSqrt3, +kInvSqrt3);
+	pNormals[7] = CNormalVertex(-kInvSqrt3, -kInvSqrt3, +kInvSqrt3);
+
+	const UINT normalStride = sizeof(CNormalVertex);
+	m_pd3dNormalBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		pNormals, normalStride * 8,
+		D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dNormalUploadBuffer);
+
+	m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+	m_d3dNormalBufferView.StrideInBytes  = normalStride;
+	m_d3dNormalBufferView.SizeInBytes    = normalStride * 8;
+	m_bHasNormals = true;
 }
 
 CCubeMeshDiffused::~CCubeMeshDiffused()

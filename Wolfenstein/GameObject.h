@@ -194,4 +194,10 @@ private:
 	bool  m_bJumping          = false;
 	float m_fVerticalVelocity = 0.0f;
 	float m_fJumpCooldown     = 0.0f;
+
+	// A* 경로 캐시 — 추적 중 갱신 간격마다 재계산.
+	std::vector<XMFLOAT3> m_vPath;           // 경유 셀 월드 좌표 목록
+	size_t                m_nPathIndex  = 0; // 현재 향하고 있는 웨이포인트 인덱스
+	float                 m_fPathTimer  = 0.0f; // 경로 재계산 타이머
+	static constexpr float kPathRecalcInterval = 0.5f;
 };

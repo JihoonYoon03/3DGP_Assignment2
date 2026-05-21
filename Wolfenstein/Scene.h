@@ -103,4 +103,12 @@ protected:
 	// 적 총알이 플레이어에 적중했을 때 라이프를 깎기 위해 GameFramework 가
 	// 등록한 콜백. 등록되지 않으면 피격 처리를 스킵한다.
 	std::function<void()> m_fnOnPlayerHit;
+
+	// ===== 퐁 디퓨즈 라이팅 =====
+	// 단순 방향광 1개 + 환경광. 그림자/스페큘러 없음.
+	// Render() 마다 한 번 b2 root constants 로 업로드된다.
+	// 라이트 진행 방향: 정규화된 -Y 약간 비스듬 (위에서 비추는 햇빛).
+	XMFLOAT3 m_xmf3LightDir   = { -0.4f, -1.0f, -0.3f };
+	XMFLOAT3 m_xmf3LightColor = {  0.9f,  0.9f,  0.85f };
+	XMFLOAT3 m_xmf3Ambient    = {  0.25f, 0.25f, 0.30f };
 };

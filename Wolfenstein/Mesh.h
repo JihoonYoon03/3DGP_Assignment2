@@ -35,6 +35,16 @@ public:
 	~CDiffusedVertex() {}
 };
 
+// 노멀 전용 정점 구조.
+// 위치/색상 버퍼(slot 0)와 분리하여 slot 1 에 병렬로 바인딩한다.
+class CNormalVertex {
+public:
+	XMFLOAT3 m_xmf3Normal;
+	CNormalVertex() : m_xmf3Normal(0.0f, 0.0f, 0.0f) {}
+	CNormalVertex(XMFLOAT3 n) : m_xmf3Normal(n) {}
+	CNormalVertex(float x, float y, float z) : m_xmf3Normal(x, y, z) {}
+};
+
 class CMesh {
 public:
 	CMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList);
@@ -49,7 +59,13 @@ protected:
 	ComPtr<ID3D12Resource>		m_pd3dIndexBuffer;
 	ComPtr<ID3D12Resource>		m_pd3dIndexUploadBuffer;
 
+	// 노멀 병렬 버퍼 (slot 1). m_bHasNormals 가 true 일 때만 바인딩.
+	ComPtr<ID3D12Resource>		m_pd3dNormalBuffer;
+	ComPtr<ID3D12Resource>		m_pd3dNormalUploadBuffer;
+	bool					m_bHasNormals = false;
+
 	D3D12_VERTEX_BUFFER_VIEW	m_d3dVertexBufferView;
+	D3D12_VERTEX_BUFFER_VIEW	m_d3dNormalBufferView{};
 	D3D12_INDEX_BUFFER_VIEW		m_d3dIndexBufferView;
 
 	D3D12_PRIMITIVE_TOPOLOGY	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
