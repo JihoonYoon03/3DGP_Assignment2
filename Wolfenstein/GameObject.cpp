@@ -470,28 +470,48 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	}
 	case EEnemyAIState::Pursue:
 	{
-		// 플레이어 방향 단위 벡터 (XZ 만 사용 — 총알은 수평으로 비행).
+		// 플레이어 방향 단위 벡터 (XZ 만 사용 — 발사 방향은 수평 기준).
 		XMFLOAT3 dir{ playerPos.x - myPos.x, 0.0f, playerPos.z - myPos.z };
 		const float len = sqrtf(dir.x * dir.x + dir.z * dir.z);
 		if (len > 1e-5f) {
 			dir.x /= len; dir.z /= len;
 
-			// 발사 직후 m_fAimFreeze 동안은 멈춤 (사용자 결정: 발사 시 잠시 멈춤).
-			if (m_fAimFreeze <= 0.0f) {
-				const XMFLOAT3 prePos = GetPosition();
-				TryMoveXZ(dir, kStep);
-				const XMFLOAT3 postPos = GetPosition();
-				const bool bStuck = (fabsf(postPos.x - prePos.x) < 1e-4f &&
-				                     fabsf(postPos.z - prePos.z) < 1e-4f);
-				if (bStuck) {
-					// 완전히 막혔을 때 플레이어 방향에 가장 가까운 빈 방향으로 우회.
-					const XMFLOAT3 avoidDir = BestFreeDirectionToward(dir);
-					const float avoidLen = sqrtf(avoidDir.x * avoidDir.x + avoidDir.z * avoidDir.z);
-					if (avoidLen > 1e-5f) TryMoveXZ(avoidDir, kStep);
+			// A* 경로 갱신: 타이머 만료 또는 경로 소진 시 재계산.
+			m_fPathTimer -= fTimeElapsed;
+			if (m_fPathTimer <= 0.0f || m_vPath.empty() || m_nPathIndex >= m_vPath.size()) {
+				const float kFeetY = myPos.y - m_xmf3AABBHalf.y;
+				m_vPath     = FindPathAStar(m_eSceneState, myPos, playerPos);
+				m_nPathIndex = 0;
+				m_fPathTimer = kPathRecalcInterval;
+			}
+
+			// 이동 방향: A* 경로가 있으면 다음 웨이포인트, 없으면 직선 추적으로 폴백.
+			XMFLOAT3 moveDir = dir;  // 기본값: 플레이어 직선 방향
+			if (!m_vPath.empty() && m_nPathIndex < m_vPath.size()) {
+				const XMFLOAT3& wp = m_vPath[m_nPathIndex];
+				XMFLOAT3 toWp{ wp.x - myPos.x, 0.0f, wp.z - myPos.z };
+				const float wpDist = sqrtf(toWp.x * toWp.x + toWp.z * toWp.z);
+				// 웨이포인트 절반 셀 이내 진입 시 다음으로 전진
+				if (wpDist < MAP_TILE_SIZE * 0.5f) {
+					++m_nPathIndex;
+					if (m_nPathIndex < m_vPath.size()) {
+						const XMFLOAT3& wp2 = m_vPath[m_nPathIndex];
+						XMFLOAT3 toWp2{ wp2.x - myPos.x, 0.0f, wp2.z - myPos.z };
+						const float d2 = sqrtf(toWp2.x * toWp2.x + toWp2.z * toWp2.z);
+						if (d2 > 1e-4f) { toWp2.x /= d2; toWp2.z /= d2; moveDir = toWp2; }
+					}
+				} else if (wpDist > 1e-4f) {
+					toWp.x /= wpDist; toWp.z /= wpDist;
+					moveDir = toWp;
 				}
 			}
 
-			// 발사 쿨다운이 끝나면 총알 발사.
+			// 발사 직후 m_fAimFreeze 동안은 정지 (발사 연출).
+			if (m_fAimFreeze <= 0.0f) {
+				TryMoveXZ(moveDir, kStep);
+			}
+
+			// 발사 쿨다운이 끝나면 플레이어 직선 방향으로 총알 발사.
 			if (m_fFireCooldown <= 0.0f && m_fnFire) {
 				const XMFLOAT3 muzzle{
 					myPos.x + dir.x * 0.8f,

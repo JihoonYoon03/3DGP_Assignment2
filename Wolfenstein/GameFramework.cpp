@@ -28,7 +28,7 @@ CGameFramework::CGameFramework()
 	_tcscpy_s(m_pszFrameRate, _T("LapProject ("));
 }
 
-// ���� ���α׷��� D3D12 ����̽�/����ü�� ���� ��� �ʱ�ȭ�ϴ� ������.
+// ???? ???��???? D3D12 ??????/??????? ???? ??? ??????? ??????.
 bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 {
 	m_hInstance = hInstance;
@@ -47,15 +47,15 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hMainWnd)
 
 void CGameFramework::OnDestroy()
 {
-	// GPU�� ��� �۾��� ����ĥ ������ ����� �� �ڿ� ����.
+	// GPU?? ??? ????? ????? ?????? ????? ?? ??? ????.
 	WaitForGPUComplete();
 
-	// ���� ��ü(������ ���ҽ� ����) ����.
+	// ???? ???(?????? ????? ????) ????.
 	ReleaseObjects();
 
 	::CloseHandle(m_hFenceEvent);
 
-	// swapchain ������ ���� ���� ��ȯ �� ����.
+	// swapchain ?????? ???? ???? ??? ?? ????.
 	m_pdxgiSwapChain->SetFullscreenState(FALSE, NULL);
 }
 
@@ -81,7 +81,7 @@ void CGameFramework::CreateSwapChain()
 	dxgiSwapChainDesc.SampleDesc.Quality = (m_bMsaa4xEnable) ? (m_nMsaa4xQualityLevels - 1) : 0;
 	dxgiSwapChainDesc.Windowed = TRUE;
 
-	// Ǯ��ũ�� ����� �����ϵ��� ��� ���� ��� �÷���.
+	// ?????? ????? ????????? ??? ???? ??? ?��???.
 	dxgiSwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
 	ComPtr<IDXGISwapChain> pSwapChain;
@@ -124,7 +124,7 @@ void CGameFramework::CreateDirect3DDevice()
 
 	ComPtr<IDXGIAdapter1> pd3dAdapter = NULL;
 
-	// �ý����� ����͵��� ��ȸ�ϸ鼭 D3D12 ��� ���� 12.0 �� �����ϴ� ù ����͸� ã�´�.
+	// ??????? ???????? ?????? D3D12 ??? ???? 12.0 ?? ??????? ? ?????? ??��?.
 	for (UINT i = 0; DXGI_ERROR_NOT_FOUND != m_pdxgiFactory->EnumAdapters1(i, &pd3dAdapter); ++i)
 	{
 		DXGI_ADAPTER_DESC1 dxgiAdapterDesc;
@@ -133,7 +133,7 @@ void CGameFramework::CreateDirect3DDevice()
 		if (dxgiAdapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
 			continue;
 
-		// ID3D12Device ���� �κ�.
+		// ID3D12Device ???? ?��?.
 		if (SUCCEEDED(D3D12CreateDevice(
 			pd3dAdapter.Get(),
 			D3D_FEATURE_LEVEL_12_0,
@@ -142,7 +142,7 @@ void CGameFramework::CreateDirect3DDevice()
 			break;
 	}
 
-	// 12.0 ����͸� �� ã���� WARP(����Ʈ����) ����ͷ� ����.
+	// 12.0 ?????? ?? ????? WARP(?????????) ?????? ????.
 	if (!pd3dAdapter)
 	{
 		m_pdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pd3dAdapter));
@@ -156,7 +156,7 @@ void CGameFramework::CreateDirect3DDevice()
 
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
 	d3dMsaaQualityLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	d3dMsaaQualityLevels.SampleCount = 4;	// MSAA 4x ��Ƽ���ø�
+	d3dMsaaQualityLevels.SampleCount = 4;	// MSAA 4x ??????��?
 	d3dMsaaQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	d3dMsaaQualityLevels.NumQualityLevels = 0;
 	m_pd3dDevice->CheckFeatureSupport(
@@ -165,10 +165,10 @@ void CGameFramework::CreateDirect3DDevice()
 		sizeof(D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS)
 	);
 
-	// ����̽��� �����ϴ� ���� ���� ǰ�� ���� ���� �����Ѵ�.
+	// ???????? ??????? ???? ???? ??? ???? ???? ???????.
 	m_nMsaa4xQualityLevels = d3dMsaaQualityLevels.NumQualityLevels;
 
-	// �潺 ����, �ʱⰪ 0.
+	// ?�� ????, ??? 0.
 	hResult = m_pd3dDevice->CreateFence(
 		0,
 		D3D12_FENCE_FLAG_NONE,
@@ -176,13 +176,13 @@ void CGameFramework::CreateDirect3DDevice()
 	);
 	m_nFenceValue = 0;
 
-	// �潺 ��ȣ ���� �̺�Ʈ ��ü ���� (���� ���� FALSE, �ʱⰪ FALSE).
+	// ?�� ??? ???? ???? ??? ???? (???? ???? FALSE, ??? FALSE).
 	m_hFenceEvent = ::CreateEvent(NULL, FALSE, FALSE, NULL);
 }
 
 void CGameFramework::CreateCommandQueueAndList()
 {
-	// Direct Ŀ�ǵ� ť ����.
+	// Direct ��??? ? ????.
 	D3D12_COMMAND_QUEUE_DESC d3dCommandQueueDesc;
 	::ZeroMemory(&d3dCommandQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
 	d3dCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -193,13 +193,13 @@ void CGameFramework::CreateCommandQueueAndList()
 		IID_PPV_ARGS(&m_pd3dCommandQueue)
 	);
 
-	// Ŀ�ǵ� �Ҵ��� ����.
+	// ��??? ????? ????.
 	hResult = m_pd3dDevice->CreateCommandAllocator(
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
 		IID_PPV_ARGS(&m_pd3dCommandAllocator)
 	);
 
-	// Ŀ�ǵ� ����Ʈ ����.
+	// ��??? ????? ????.
 	hResult = m_pd3dDevice->CreateCommandList(
 		0,
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -208,7 +208,7 @@ void CGameFramework::CreateCommandQueueAndList()
 		IID_PPV_ARGS(&m_pd3dCommandList)
 	);
 
-	// ���� ����Ʈ�� ���� ���� Open �����̹Ƿ� Close �� �ݾƵд�.
+	// ???? ??????? ???? ???? Open ???????? Close ?? ???��?.
 	hResult = m_pd3dCommandList->Close();
 }
 
@@ -221,7 +221,7 @@ void CGameFramework::CreateRtvAndDsvDescriptorHeaps()
 	d3dDescriptorHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	d3dDescriptorHeapDesc.NodeMask = 0;
 
-	// ����ü�� ���� ����ŭ�� RTV ��ũ���� ��.
+	// ??????? ???? ??????? RTV ??????? ??.
 	HRESULT hResult = m_pd3dDevice->CreateDescriptorHeap(
 		&d3dDescriptorHeapDesc,
 		IID_PPV_ARGS(&m_pd3dRtvDescriptorHeap)
@@ -229,7 +229,7 @@ void CGameFramework::CreateRtvAndDsvDescriptorHeaps()
 
 	m_nRtvDescriptorIncrementSize = m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
-	// DSV ��ũ���� ��(1��).
+	// DSV ??????? ??(1??).
 	d3dDescriptorHeapDesc.NumDescriptors = 1;
 	d3dDescriptorHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 	hResult = m_pd3dDevice->CreateDescriptorHeap(
@@ -240,7 +240,7 @@ void CGameFramework::CreateRtvAndDsvDescriptorHeaps()
 	m_nDsvDescriptorIncrementSize = m_pd3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 }
 
-// ����ü�� �� ���ۿ� ���� RTV �� �����.
+// ??????? ?? ????? ???? RTV ?? ?????.
 void CGameFramework::CreateRenderTargetViews()
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle = m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
@@ -283,7 +283,7 @@ void CGameFramework::CreateDepthStencilView()
 	d3dHeapProperties.CreationNodeMask = 1;
 	d3dHeapProperties.VisibleNodeMask = 1;
 
-	// ����-���ٽ� ���� Ŭ���� ��.
+	// ????-????? ???? ????? ??.
 	D3D12_CLEAR_VALUE d3dClearValue;
 	d3dClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	d3dClearValue.DepthStencil.Depth = 1.0f;
@@ -297,7 +297,7 @@ void CGameFramework::CreateDepthStencilView()
 		IID_PPV_ARGS(&m_pd3dDepthStencilBuffer)
 	);
 
-	// ����-���ٽ� �� ����.
+	// ????-????? ?? ????.
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle =
 		m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_pd3dDevice->CreateDepthStencilView(
@@ -311,7 +311,7 @@ void CGameFramework::BuildObjects()
 {
 	m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL);
 
-	// ī�޶� ��ü �ʱ�ȭ - ����Ʈ/������Ʈ/�������/�ʱ� �����.
+	// ???? ??? ???? - ?????/???????/???????/??? ?????.
 	m_pCamera = std::make_unique<CCamera>();
 	m_pCamera->SetViewport(0, 0, m_nWndClientWidth, m_nWndClientHeight, 0.0f, 1.0f);
 	m_pCamera->SetScissorRect(0, 0, m_nWndClientWidth, m_nWndClientHeight);
@@ -320,11 +320,11 @@ void CGameFramework::BuildObjects()
 	m_pCamera->GenerateViewMatrix(XMFLOAT3(0.0f, 0.0f, -50.0f), XMFLOAT3(0.0f, 0.0f, 0.0f),
 		XMFLOAT3(0.0f, 1.0f, 0.0f));
 
-	// �� ���� �� �� ������ ��� ���� ��ü ����.
+	// ?? ???? ?? ?? ?????? ??? ???? ??? ????.
 	m_pScene = std::make_unique<CScene>();
 	m_pScene->BuildObjects(m_pd3dDevice.Get(), m_pd3dCommandList.Get());
 
-	// TPS ���������� ���̴� �÷��̾� ��(���� ť��). ��/����/���̴� ��� ������ ���� ������.
+	// TPS ?????????? ????? ?��???? ??(???? ???). ??/????/????? ??? ?????? ???? ??????.
 	{
 		auto pPlayerMesh = std::make_shared<CCubeMeshDiffused>(
 			m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
@@ -337,30 +337,30 @@ void CGameFramework::BuildObjects()
 	}
 
 	// Shared mesh for bullets and the crosshair so spawning new ones is cheap.
-	// 플레이어 총알: 노란 큐브 (기존 색 유지)
+	// �÷��̾� �Ѿ�: ��� ť�� (���� �� ����)
 	m_pBulletMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		0.4f, 0.4f, 0.4f, true, XMFLOAT4(1.0f, 0.9f, 0.2f, 1.0f));
 
-	// 적 총알: 시각 구분을 위해 붉은 큐브.
+	// �� �Ѿ�: �ð� ������ ���� ���� ť��.
 	m_pEnemyBulletMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		0.4f, 0.4f, 0.4f, true, XMFLOAT4(1.0f, 0.25f, 0.20f, 1.0f));
 
-	// 적 공유 메시: 어두운 보라 계열 큐브. 플레이어(붉은색) 와 시각 구분.
+	// �� ���� �޽�: ��ο� ���� �迭 ť��. �÷��̾�(������) �� �ð� ����.
 	m_pEnemyMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		1.2f, 2.6f, 1.2f, true, XMFLOAT4(0.45f, 0.15f, 0.55f, 1.0f));
 
-	// HUD 셰이더 (십자선 + 라이프 바 공용). 깊이 OFF, 컬링 OFF.
-	// CreateShader 는 가상 함수이므로 base 포인터로 호출해도 CHudShader::CreateShader 가 디스패치된다.
+	// HUD ���̴� (���ڼ� + ������ �� ����). ���� OFF, �ø� OFF.
+	// CreateShader �� ���� �Լ��̹Ƿ� base �����ͷ� ȣ���ص� CHudShader::CreateShader �� ����ġ�ȴ�.
 	m_pHudShader = std::make_shared<CHudShader>();
 	if (m_pScene) {
 		m_pHudShader->CreateShader(m_pd3dDevice.Get(), m_pScene->GetGraphicsRootSignature());
 	}
 
-	// 화면 정중앙 고정 십자선(+) 조준점. 정점이 NDC(클립 공간) 좌표로 미리
-	// 박혀 있으므로 카메라 회전/이동에 무관하게 항상 화면 정가운데에 그려진다.
+	// ȭ�� ���߾� ���� ���ڼ�(+) ������. ������ NDC(Ŭ�� ����) ��ǥ�� �̸�
+	// ���� �����Ƿ� ī�޶� ȸ��/�̵��� �����ϰ� �׻� ȭ�� ������� �׷�����.
 	{
 		auto pCrosshairMesh = std::make_shared<CCrosshairMesh>(
 			m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
@@ -371,8 +371,8 @@ void CGameFramework::BuildObjects()
 		m_pCrosshair->SetShader(m_pHudShader);
 	}
 
-	// 라이프 바 칸 10개 생성. 모두 같은 색(붉은)으로 만들고, 매 프레임 m_nPlayerLife
-	// 개수만큼 앞에서부터만 렌더하여 잃은 칸은 그리지 않는다.
+	// ������ �� ĭ 10�� ����. ��� ���� ��(����)���� �����, �� ������ m_nPlayerLife
+	// ������ŭ �տ������͸� �����Ͽ� ���� ĭ�� �׸��� �ʴ´�.
 	m_pLifeBarSegments.reserve(10);
 	for (UINT i = 0; i < 10u; ++i) {
 		auto pSegMesh = std::make_shared<CLifeBarMesh>(
@@ -386,7 +386,7 @@ void CGameFramework::BuildObjects()
 		m_pLifeBarSegments.push_back(std::move(pSegObj));
 	}
 
-	// 라이프 감소 콜백 등록. Scene 에서 EnemyBullet × Player 충돌 시 호출된다.
+	// ������ ���� �ݹ� ���. Scene ���� EnemyBullet �� Player �浹 �� ȣ��ȴ�.
 	if (m_pScene) {
 		m_pScene->SetOnPlayerHit([this]() {
 			if (m_nPlayerLife > 0) --m_nPlayerLife;
@@ -394,15 +394,15 @@ void CGameFramework::BuildObjects()
 		});
 	}
 
-	// Ŀ�ǵ� ����Ʈ�� �ݰ� ť�� �����Ͽ� GPU �� ��� ���ε带 �����ϰ� �Ѵ�.
+	// ��??? ??????? ??? ??? ??????? GPU ?? ??? ???��? ??????? ???.
 	m_pd3dCommandList->Close();
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
 	m_pd3dCommandQueue->ExecuteCommandLists(1, ppd3dCommandLists);
 
-	// GPU �� ���ε带 �� ó���� ������ ��ٸ���.
+	// GPU ?? ???��? ?? ????? ?????? ??????.
 	WaitForGPUComplete();
 
-	// ���ε�� �ӽ� ���۵��� ����(���� ���۴� ����).
+	// ???��?? ??? ??????? ????(???? ????? ????).
 	if (m_pScene) m_pScene->ReleaseUploadBuffers();
 	if (m_pBulletMesh) m_pBulletMesh->ReleaseUploadBuffers();
 	if (m_pEnemyBulletMesh) m_pEnemyBulletMesh->ReleaseUploadBuffers();
@@ -471,11 +471,11 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			::PostQuitMessage(0);
 			break;
 		case VK_F9:
-			// F9: Ǯ��ũ��/â��� ���.
+			// F9: ??????/???? ???.
 			ChangeSwapChainState();
 			break;
 		case 'V':
-			// V: FPS / TPS ���� ��� (�䱸 C). �ΰ��� ������ ���� ȿ���� ���δ�.
+			// V: FPS / TPS ???? ??? (?? C). ????? ?????? ???? ????? ???��?.
 			if (m_pCamera && m_pScene) {
 				const SceneState st = m_pScene->GetCurrentState();
 				if (st == SceneState::MAP1 || st == SceneState::MAP2) {
@@ -562,10 +562,10 @@ void CGameFramework::ProcessInput()
 	if (!m_pScene || !m_pCamera) return;
 
 	const SceneState state = m_pScene->GetCurrentState();
-	// 1��Ī/3��Ī �̵�(���콺 ��, WASD, ����) �Է��� MAP1/MAP2 ������ ó���Ѵ�.
+	// 1???/3??? ???(???�J ??, WASD, ????) ????? MAP1/MAP2 ?????? ??????.
 	const bool bGameplay = (state == SceneState::MAP1 || state == SceneState::MAP2);
 	if (!bGameplay) {
-		// LANDING/MAP_SELECT: ���콺 Ŀ�� ǥ��, ĸó ����.
+		// LANDING/MAP_SELECT: ???�J ��?? ???, ��? ????.
 		if (m_bMouseCaptured) {
 			::ShowCursor(TRUE);
 			m_bMouseCaptured = false;
@@ -578,7 +578,7 @@ void CGameFramework::ProcessInput()
 
 	const bool bForeground = (::GetForegroundWindow() == m_hWnd);
 
-	// =============== ���콺 �� ===============
+	// =============== ???�J ?? ===============
 	if (bForeground) {
 		RECT rcClient;
 		::GetClientRect(m_hWnd, &rcClient);
@@ -598,18 +598,20 @@ void CGameFramework::ProcessInput()
 			const int dy = pt.y - m_ptWndCenterScreen.y;
 			if (dx != 0 || dy != 0) {
 				const float kSensitivityDeg = 0.15f;
-				const float fYaw   = XMConvertToRadians(static_cast<float>(dx) * kSensitivityDeg);
-				const float fPitch = XMConvertToRadians(static_cast<float>(dy) * kSensitivityDeg);
-				m_pCamera->Rotate(-fPitch, fYaw);
+				const float fYaw   = XMConvertToRadians(static_cast<float>(dx)  * kSensitivityDeg);
+				// 마우스 Y 부호(화면 아래=양수)와 pitch 부호(위=양수)를 입력단에서 통일한다.
+				// 이전에 Rotate(-fPitch, ...) 로 처리하던 부호 반전을 여기서 흡수한다.
+				const float fPitch = XMConvertToRadians(static_cast<float>(-dy) * kSensitivityDeg);
+				m_pCamera->Rotate(fPitch, fYaw);
 				::SetCursorPos(m_ptWndCenterScreen.x, m_ptWndCenterScreen.y);
 			}
 			m_ptWndCenterScreen = ptCenter;
 		}
 	}
 
-	// =============== WASD + �浹 (XZ) ===============
-	// ���� �ִ� �÷��̾� ��ġ�� m_xmf3PlayerPos. ī�޶� TPS �� �� �ڷ� ���� ��ǥ�� �Űܰ�����,
-	// �̵�/�浹/�߷� ������ ��� m_xmf3PlayerPos �� ���� �����Ѵ�.
+	// =============== WASD + ?�� (XZ) ===============
+	// ???? ??? ?��???? ????? m_xmf3PlayerPos. ???? TPS ?? ?? ??? ???? ????? ????????,
+	// ???/?��/??? ?????? ??? m_xmf3PlayerPos ?? ???? ???????.
 	const float dt = m_GameTimer.GetTimeElapsed();
 	const float kMoveSpeed = 6.0f;
 	const float kStep = kMoveSpeed * dt;
@@ -651,8 +653,8 @@ void CGameFramework::ProcessInput()
 		}
 	}
 
-	// =============== ���� + �߷� (Y) ===============
-	// ���� ����: 3 * STEP_H (~2.1) ���� ���. v0 = sqrt(2 * g * h).
+	// =============== ???? + ??? (Y) ===============
+	// ???? ????: 3 * STEP_H (~2.1) ???? ???. v0 = sqrt(2 * g * h).
 	const float kGravity = 30.0f;
 	const float kJumpApex = 3.0f * 0.7f; // STEP_H = 0.7
 	const float kJumpV0 = sqrtf(2.0f * kGravity * kJumpApex);
@@ -668,7 +670,7 @@ void CGameFramework::ProcessInput()
 	const float groundY = floorYAtNext + MAP_EYE_HEIGHT;
 
 	if (!m_bGrounded) {
-		// ����: �߷� ����, y ����.
+		// ????: ??? ????, y ????.
 		m_fVerticalVelocity -= kGravity * dt;
 		next.y = pos.y + m_fVerticalVelocity * dt;
 		if (next.y <= groundY) {
@@ -678,16 +680,16 @@ void CGameFramework::ProcessInput()
 		}
 	}
 	else {
-		// ����: �� ���̿� ī�޶� �� ��ġ ���� (��� �ڿ������� ��������).
+		// ????: ?? ????? ???? ?? ??? ???? (??? ????????? ????????).
 		next.y = groundY;
 	}
 
-	// ���� �ִ� �÷��̾� ��ġ ����.
+	// ???? ??? ?��???? ??? ????.
 	m_xmf3PlayerPos = next;
 
-	// ī�޶� ��ġ�� ��忡 ���� �б�.
+	// ???? ????? ??? ???? ?��?.
 	if (m_pCamera->GetMode() == ECameraMode::FPS) {
-		// FPS: ī�޶� ��ġ = �÷��̾� �� ��ġ.
+		// FPS: ???? ??? = ?��???? ?? ???.
 		m_pCamera->SetPosition(m_xmf3PlayerPos);
 		// Keep the (invisible) player model aligned with camera yaw so that
 		// flipping to TPS looks consistent immediately.
@@ -700,31 +702,35 @@ void CGameFramework::ProcessInput()
 		}
 	}
 	else {
-		// TPS: �÷��̾� �ڷ� kBack ��ŭ, ���� kUp ��ŭ ������ ��ġ�� ī�޶� �д�.
+		// TPS: ?��???? ??? kBack ???, ???? kUp ??? ?????? ????? ???? ?��?.
 		// Spring-arm: clamp the camera-to-player distance if a wall is in
 		// the way so the camera does not pop through level geometry.
-		// TPS sphere orbit: yaw=수평, pitch=수직 궤도 각도. 카메라는 항상 플레이어를 바라본다.
-		const float kBack = 7.0f, kUp = 2.5f;
-		const float yaw   = m_pCamera->GetYaw();
-		const float pitch = m_pCamera->GetPitch();
+		// TPS sphere orbit: yaw=����, pitch=���� �˵� ����. ī�޶�� �׻� �÷��̾ �ٶ󺻴�.
+		// TPS: 어깨 너머(over-the-shoulder) 카메라.
+		// 카메라의 yaw/pitch 방향은 Rotate() 에서 이미 FPS 와 동일하게 갱신되므로
+		// look 벡터가 곳 조준점 방향이다. 위치만 플레이어 뒤로 오프셋한다.
+		// 높이는 pitch 에 무관하게 플레이어 기준 고정값으로 유지해 자연스러운 어깨 시점 확보.
+		const float kBack     = 5.0f;   // 수평 후퇴 거리
+		const float kUp       = 1.0f;   // 플레이어 기준 위쪽 오프셋 (머리 높이)
+		const float kShoulder = 1.2f;   // 오른쪽 어깨 너머 수평 오프셋
 
-		// 수평 back 방향(pitch 무관, 벽 클램프용 단위 벡터)
-		const XMFLOAT3 backDir{ -sinf(yaw), 0.0f, -cosf(yaw) };
-		// 수평/수직 거리 성분
-		const float horizBack = kBack * cosf(pitch);
-		const float vertBack  = kBack * sinf(pitch);
-		const float eyeY      = m_xmf3PlayerPos.y + vertBack + kUp;
+		const float yaw = m_pCamera->GetYaw();
+		// 수평 후방 / 우방 단위 벡터 (pitch 무관, 순수 yaw 기반)
+		const XMFLOAT3 backHoriz{  -sinf(yaw), 0.0f, -cosf(yaw) };
+		const XMFLOAT3 rightHoriz{  cosf(yaw), 0.0f, -sinf(yaw) };
 
-		// 벽 관통 방지(수평 거리만 클램프)
-		const float dist = ClampDistanceAgainstWalls(state, m_xmf3PlayerPos, backDir, horizBack, eyeY);
+		// 후방 거리가 벽에 닿으면 클램프 (수평만)
+		const float safeDist = ClampDistanceAgainstWalls(
+			state, m_xmf3PlayerPos, backHoriz, kBack,
+			m_xmf3PlayerPos.y + kUp);
 
 		XMFLOAT3 tpsEye{
-			m_xmf3PlayerPos.x + backDir.x * dist,
-			eyeY,
-			m_xmf3PlayerPos.z + backDir.z * dist };
+			m_xmf3PlayerPos.x + backHoriz.x * safeDist + rightHoriz.x * kShoulder,
+			m_xmf3PlayerPos.y + kUp,
+			m_xmf3PlayerPos.z + backHoriz.z * safeDist + rightHoriz.z * kShoulder };
 
-		// 카메라가 항상 플레이어를 바라보도록(m_fPitch/m_fYaw 는 궤도 각도로 보존)
-		m_pCamera->SetPositionAndTarget(tpsEye, m_xmf3PlayerPos);
+		// look 방향(yaw/pitch)은 Rotate() 로 보존됨 — SetPosition 만 적용.
+		m_pCamera->SetPosition(tpsEye);
 
 		if (m_pPlayerModel) {
 			XMFLOAT3 modelCenter{
@@ -735,9 +741,9 @@ void CGameFramework::ProcessInput()
 		}
 	}
 
-	// 십자선은 NDC 정점을 그대로 사용하는 CCrosshairMesh + CHudShader 조합으로
-	// 그려지므로 별도의 위치/회전 갱신이 필요 없다. FrameAdvance 의 Render 단계에서
-	// 마지막에 한 번 호출되면 항상 화면 정중앙에 회전 없이 표시된다.
+	// ���ڼ��� NDC ������ �״�� ����ϴ� CCrosshairMesh + CHudShader ��������
+	// �׷����Ƿ� ������ ��ġ/ȸ�� ������ �ʿ� ����. FrameAdvance �� Render �ܰ迡��
+	// �������� �� �� ȣ��Ǹ� �׻� ȭ�� ���߾ӿ� ȸ�� ���� ǥ�õȴ�.
 }
 
 void CGameFramework::FireBullet()
@@ -747,15 +753,10 @@ void CGameFramework::FireBullet()
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
 	if (m_fFireCooldown > 0.0f) return;
 
-	// TPS 모드: 카메라가 플레이어 look-at 으로 설정되므로 궤도 yaw 방향을 사용.
-	// FPS 모드: 카메라 look 방향 그대로.
-	XMFLOAT3 look;
-	if (m_pCamera->GetMode() == ECameraMode::TPS) {
-		const float yaw = m_pCamera->GetYaw();
-		look = { sinf(yaw), 0.0f, cosf(yaw) };
-	} else {
-		look = m_pCamera->GetLook();
-	}
+
+// FPS/TPS 구분 없이 카메라 look 벡터를 발사 방향으로 사용한다.
+	// TPS 가 어깨 너머 방식으로 바뀌면서 look 벡터가 조준점과 일치하게 되었다.
+	const XMFLOAT3 look = m_pCamera->GetLook();
 	XMFLOAT3 origin{
 		m_xmf3PlayerPos.x + look.x * 0.8f,
 		m_xmf3PlayerPos.y + 0.2f,
@@ -775,7 +776,7 @@ void CGameFramework::SpawnEnemyBullet(const XMFLOAT3& xmf3Origin, const XMFLOAT3
 	const SceneState state = m_pScene->GetCurrentState();
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
 
-	// 적 총알은 플레이어 총알보다 조금 느려 회피 가능성을 남긴다.
+	// �� �Ѿ��� �÷��̾� �Ѿ˺��� ���� ���� ȸ�� ���ɼ��� �����.
 	const float kEnemyBulletSpeed = 18.0f;
 	auto pBullet = std::make_shared<CBulletObject>(xmf3Origin, xmf3Dir, kEnemyBulletSpeed, EObjectTag::EnemyBullet);
 	pBullet->SetMesh(m_pEnemyBulletMesh);
@@ -788,22 +789,22 @@ void CGameFramework::SpawnEnemiesForMap(SceneState state)
 	if (!m_pScene || !m_pEnemyMesh) return;
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
 
-	// 적은 AABB half y = 1.3 (몸체 높이 2.6). 플레이어 반경 5타일 바깥에서 무작위 추출.
+	// ���� AABB half y = 1.3 (��ü ���� 2.6). �÷��̾� �ݰ� 5Ÿ�� �ٱ����� ������ ����.
 	const float kEnemyHalfY = 1.3f;
 	std::vector<XMFLOAT3> spawns = PickEnemySpawnPositions(state, m_xmf3PlayerPos, 10, kEnemyHalfY);
 
 	std::mt19937 seedGen{ std::random_device{}() };
 	for (const XMFLOAT3& pos : spawns) {
-		// 인스턴스별 시드로 RNG 독립성 확보.
+		// �ν��Ͻ��� �õ�� RNG ������ Ȯ��.
 		const unsigned int nSeed = seedGen();
 		auto pEnemy = std::make_shared<CEnemyObject>(state, nSeed);
 		pEnemy->SetMesh(m_pEnemyMesh);
 		pEnemy->SetPosition(pos);
-		// 적이 총알을 발사할 때 호출되는 콜백 — GameFramework 의 SpawnEnemyBullet 로 위임.
+		// ���� �Ѿ��� �߻��� �� ȣ��Ǵ� �ݹ� ? GameFramework �� SpawnEnemyBullet �� ����.
 		pEnemy->SetFireCallback([this](const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir) {
 			SpawnEnemyBullet(xmf3Origin, xmf3Dir);
 		});
-		// 시야 판정 / 추적 방향 계산을 위해 플레이어의 현재 위치를 가져온다.
+		// �þ� ���� / ���� ���� ����� ���� �÷��̾��� ���� ��ġ�� �����´�.
 		pEnemy->SetPlayerPosGetter([this]() {
 			return m_xmf3PlayerPos;
 		});
@@ -816,14 +817,14 @@ void CGameFramework::AnimateObjects()
 	if (!m_pScene) return;
 	m_pScene->AnimateObjects(m_GameTimer.GetTimeElapsed());
 
-	// ���� ȭ�鿡�� GAME START ��ư�� ������ �� ���� ȭ��(MAP_SELECT) ���� ��ȯ.
+	// ???? ????? GAME START ????? ?????? ?? ???? ???(MAP_SELECT) ???? ???.
 	if (m_pScene->IsGameStartRequested() && m_pScene->GetCurrentState() == SceneState::LANDING) {
 		m_pScene->TransitionToScene(SceneState::MAP_SELECT);
 		m_pScene->ClearGameStartRequest();
 		SetupMapSelectCamera();
 	}
 
-	// �� ���� ȭ�鿡�� �̴Ͼ�ó Ŭ���� ���� �ΰ��� ������ ��ȯ.
+	// ?? ???? ????? ????? ????? ???? ????? ?????? ???.
 	if (m_pScene->GetCurrentState() == SceneState::MAP_SELECT) {
 		int n = m_pScene->ConsumeSelectedMap();
 		if (n == 1) {
@@ -836,14 +837,14 @@ void CGameFramework::AnimateObjects()
 		}
 	}
 
-	// 라이프 0 으로 사망 → 게임플레이 객체 정리 후 LANDING 화면으로 복귀.
-	// 사용자가 다시 GAME START 를 누르면 MAP_SELECT → MAP1/2 흐름으로 새 게임이 시작된다.
+	// ������ 0 ���� ��� �� �����÷��� ��ü ���� �� LANDING ȭ������ ����.
+	// ����ڰ� �ٽ� GAME START �� ������ MAP_SELECT �� MAP1/2 �帧���� �� ������ ���۵ȴ�.
 	if (m_bResetPending) {
 		m_bResetPending = false;
 		m_pScene->ResetGameplayState();
 		m_nPlayerLife = 10;
 		m_pScene->TransitionToScene(SceneState::LANDING);
-		// 마우스 캡처 / 발사 쿨다운 / 점프 상태 초기화 — 다음 게임에서 깨끗하게 시작.
+		// ���콺 ĸó / �߻� ��ٿ� / ���� ���� �ʱ�ȭ ? ���� ���ӿ��� �����ϰ� ����.
 		if (m_bMouseCaptured) {
 			::ShowCursor(TRUE);
 			m_bMouseCaptured = false;
@@ -851,7 +852,7 @@ void CGameFramework::AnimateObjects()
 		m_fFireCooldown = 0.0f;
 		m_fVerticalVelocity = 0.0f;
 		m_bGrounded = true;
-		// 카메라를 랜딩 화면 시점으로 되돌린다.
+		// ī�޶� ���� ȭ�� �������� �ǵ�����.
 		if (m_pCamera) {
 			m_pCamera->GenerateViewMatrix(
 				XMFLOAT3(0.0f, 0.0f, -50.0f),
@@ -867,38 +868,38 @@ void CGameFramework::AnimateObjects()
 void CGameFramework::SetupGameCamera(SceneState state)
 {
 	if (!m_pCamera) return;
-	// �� ���� 1��Ī ���� ��ġ/������ �� ���� MapInfo ���� �����´�.
+	// ?? ???? 1??? ???? ???/?????? ?? ???? MapInfo ???? ?????��?.
 	MapInfo info;
 	switch (state) {
 	case SceneState::MAP1: info = GetMap1Info(); break;
 	case SceneState::MAP2: info = GetMap2Info(); break;
-	default: return; // LANDING �� ������ ī�޶� �����Ѵ�.
+	default: return; // LANDING ?? ?????? ???? ???????.
 	}
 	m_pCamera->GenerateViewMatrix(info.cameraPosition, info.cameraLookAt, XMFLOAT3(0.0f, 1.0f, 0.0f));
-	// ���� �ִ� �÷��̾� ��ġ�� ī�޶� ���� ��ġ�� �ʱ�ȭ.
+	// ???? ??? ?��???? ????? ???? ???? ????? ????.
 	m_xmf3PlayerPos = info.cameraPosition;
-	// ������ �� �� ���� �� �׻� FPS �� ����.
+	// ?????? ?? ?? ???? ?? ??? FPS ?? ????.
 	m_pCamera->SetMode(ECameraMode::FPS);
 	if (m_pScene) m_pScene->SetPlayerVisible(false);
-	// ���� ProcessInput ���� �ٽ� ���콺 ĸó�� ���۵ǰ� �Ѵ�.
+	// ???? ProcessInput ???? ??? ???�J ��??? ?????? ???.
 	m_bMouseCaptured = false;
-	// ���� ���� �ʱ�ȭ.
+	// ???? ???? ????.
 	m_fVerticalVelocity = 0.0f;
 	m_bGrounded = true;
 	// Bullets fired on the previous map should not carry over; the cooldown
 	// is per-life, so reset it too.
 	m_fFireCooldown = 0.0f;
 
-	// 라이프 / 적 / 동적 객체 리셋. 이전 게임의 잔존 객체를 정리하고 새 적을 스폰한다.
-	// LANDING → MAP_SELECT → MAP1/2 로 들어오는 모든 경로에서 호출되므로,
-	// 죽고 다시 시작하는 흐름과 첫 게임 시작 흐름이 동일하게 동작한다.
+	// ������ / �� / ���� ��ü ����. ���� ������ ���� ��ü�� �����ϰ� �� ���� �����Ѵ�.
+	// LANDING �� MAP_SELECT �� MAP1/2 �� ������ ��� ��ο��� ȣ��ǹǷ�,
+	// �װ� �ٽ� �����ϴ� �帧�� ù ���� ���� �帧�� �����ϰ� �����Ѵ�.
 	m_nPlayerLife = 10;
 	m_bResetPending = false;
 	if (m_pScene) m_pScene->ResetGameplayState();
 	SpawnEnemiesForMap(state);
 
-	// 플레이어 모델의 위치를 새 스폰 위치로 즉시 동기화하여, 첫 프레임 충돌 판정이
-	// 이전 위치를 참조하지 않게 한다 (Scene::AnimateObjects 의 EnemyBullet × Player).
+	// �÷��̾� ���� ��ġ�� �� ���� ��ġ�� ��� ����ȭ�Ͽ�, ù ������ �浹 ������
+	// ���� ��ġ�� �������� �ʰ� �Ѵ� (Scene::AnimateObjects �� EnemyBullet �� Player).
 	if (m_pPlayerModel) {
 		const XMFLOAT3 modelCenter{
 			m_xmf3PlayerPos.x,
@@ -911,30 +912,30 @@ void CGameFramework::SetupGameCamera(SceneState state)
 void CGameFramework::SetupMapSelectCamera()
 {
 	if (!m_pCamera) return;
-	// �� ���� ȭ�� ī�޶�: ȭ�� �ణ ������ �̴Ͼ�ó���� ����.
+	// ?? ???? ??? ????: ??? ?? ?????? ????????? ????.
 	m_pCamera->GenerateViewMatrix(
 		XMFLOAT3(0.0f, 5.0f, -55.0f),
 		XMFLOAT3(0.0f, 0.0f, 0.0f),
 		XMFLOAT3(0.0f, 1.0f, 0.0f));
-	// ���콺 ĸó�� �����ϰ� Ŀ���� ���̰� �Ѵ�.
+	// ???�J ��??? ??????? ��???? ????? ???.
 	if (m_bMouseCaptured) {
 		::ShowCursor(TRUE);
 		m_bMouseCaptured = false;
 	}
-	// ���� ���� �ʱ�ȭ.
+	// ???? ???? ????.
 	m_fVerticalVelocity = 0.0f;
 	m_bGrounded = true;
 }
 
 void CGameFramework::WaitForGPUComplete()
 {
-	// ���� ����ۿ� ���� Fence Value �� 1 ����.
+	// ???? ?????? ???? Fence Value ?? 1 ????.
 	UINT64 nFenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
 
-	// cmdQueue �� �ñ׳��� �ɾ�, GPU �� �ű���� ��� ó���ϸ� �潺 ���� nFenceValue �� �ǵ���.
+	// cmdQueue ?? ?????? ???, GPU ?? ?????? ??? ?????? ?�� ???? nFenceValue ?? ?????.
 	HRESULT hResult = m_pd3dCommandQueue->Signal(m_pd3dFence.Get(), nFenceValue);
 
-	// ���� �潺�� nFenceValue �� �������� ���ߴٸ� �̺�Ʈ�� ���.
+	// ???? ?��?? nFenceValue ?? ???????? ?????? ?????? ???.
 	if (m_pd3dFence->GetCompletedValue() < nFenceValue) {
 		hResult = m_pd3dFence->SetEventOnCompletion(nFenceValue, m_hFenceEvent);
 		::WaitForSingleObject(m_hFenceEvent, INFINITE);
@@ -956,18 +957,18 @@ void CGameFramework::MoveToNextFrame()
 
 void CGameFramework::FrameAdvance()
 {
-	// ������ �ð� ����, �Է�/�ִϸ��̼�/������ ����.
+	// ?????? ?��? ????, ???/???????/?????? ????.
 	m_GameTimer.Tick(0.0f);
 
 	ProcessInput();
 
 	AnimateObjects();
 
-	// Ŀ�ǵ� �Ҵ���/����Ʈ ����.
+	// ��??? ?????/????? ????.
 	HRESULT hResult = m_pd3dCommandAllocator->Reset();
 	hResult = m_pd3dCommandList->Reset(m_pd3dCommandAllocator.Get(), NULL);
 
-	// ���� ����۸� PRESENT ���¿��� RENDER_TARGET ���·� ��ȯ.
+	// ???? ?????? PRESENT ???��??? RENDER_TARGET ???��? ???.
 	D3D12_RESOURCE_BARRIER d3dResourceBarrier;
 	::ZeroMemory(&d3dResourceBarrier, sizeof(D3D12_RESOURCE_BARRIER));
 	d3dResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -979,12 +980,12 @@ void CGameFramework::FrameAdvance()
 	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 
-	// ������� RTV CPU �ڵ��� �����´�.
+	// ??????? RTV CPU ????? ?????��?.
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dRtvCPUDescriptorHandle =
 		m_pd3dRtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	d3dRtvCPUDescriptorHandle.ptr += (m_nSwapChainBufferIndex * m_nRtvDescriptorIncrementSize);
 
-	// ����-���ٽ� ��ũ������ CPU �ڵ��� �����´�.
+	// ????-????? ????????? CPU ????? ?????��?.
 	D3D12_CPU_DESCRIPTOR_HANDLE d3dDsvCPUDescriptorHandle =
 		m_pd3dDsvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, FALSE,
@@ -998,7 +999,7 @@ void CGameFramework::FrameAdvance()
 		NULL
 	);
 
-	// ����/���ٽ� Ŭ����.
+	// ????/????? ?????.
 	m_pd3dCommandList->ClearDepthStencilView(
 		d3dDsvCPUDescriptorHandle,
 		D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
@@ -1008,19 +1009,19 @@ void CGameFramework::FrameAdvance()
 		NULL
 	);
 
-	// �� ������.
+	// ?? ??????.
 	if (m_pScene) m_pScene->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 
-	// 십자선은 실제 플레이 씬(MAP1/MAP2)에서만 그린다.
-	// CGameObject::Render 가 CHudShader 의 PSO 로 전환한 뒤 메시를 그리므로
-	// 깊이 테스트가 꺼져 있어 항상 다른 모든 픽셀 위에 표시된다.
+	// ���ڼ��� ���� �÷��� ��(MAP1/MAP2)������ �׸���.
+	// CGameObject::Render �� CHudShader �� PSO �� ��ȯ�� �� �޽ø� �׸��Ƿ�
+	// ���� �׽�Ʈ�� ���� �־� �׻� �ٸ� ��� �ȼ� ���� ǥ�õȴ�.
 	if (m_pCrosshair && m_pScene && m_pCamera) {
 		const SceneState st = m_pScene->GetCurrentState();
 		if (st == SceneState::MAP1 || st == SceneState::MAP2) {
 			m_pCrosshair->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 
-			// 라이프 바: 화면 중앙 하단. m_nPlayerLife 개수만큼 앞에서부터 렌더한다.
-			// 잃은 칸은 그리지 않는 단순 방식. CHudShader 를 공유하므로 PSO 전환 비용 없음.
+			// ������ ��: ȭ�� �߾� �ϴ�. m_nPlayerLife ������ŭ �տ������� �����Ѵ�.
+			// ���� ĭ�� �׸��� �ʴ� �ܼ� ���. CHudShader �� �����ϹǷ� PSO ��ȯ ��� ����.
 			const int nDraw = (m_nPlayerLife < 0) ? 0 : (m_nPlayerLife > 10 ? 10 : m_nPlayerLife);
 			for (int i = 0; i < nDraw && i < static_cast<int>(m_pLifeBarSegments.size()); ++i) {
 				if (m_pLifeBarSegments[i]) {
@@ -1030,26 +1031,26 @@ void CGameFramework::FrameAdvance()
 		}
 	}
 
-	// PRESENT ���·� �ٽ� ��ȯ.
+	// PRESENT ???��? ??? ???.
 	d3dResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	d3dResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
 	d3dResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 	m_pd3dCommandList->ResourceBarrier(1, &d3dResourceBarrier);
 
-	// ���� ����Ʈ ����.
+	// ???? ????? ????.
 	hResult = m_pd3dCommandList->Close();
 
-	// ���� ť ����.
+	// ???? ? ????.
 	ID3D12CommandList* ppd3dCommandLists[] = { m_pd3dCommandList.Get() };
 	m_pd3dCommandQueue->ExecuteCommandLists(
 		_countof(ppd3dCommandLists),
 		ppd3dCommandLists
 	);
 
-	// GPU �Ϸ� ���.
+	// GPU ??? ???.
 	WaitForGPUComplete();
 
-	// ������ ǥ�� �� FPS ĸ�� ����.
+	// ?????? ??? ?? FPS ��?? ????.
 	m_pdxgiSwapChain->Present(0, 0);
 	MoveToNextFrame();
 	m_GameTimer.GetFrameRate(m_pszFrameRate + 12, 37);

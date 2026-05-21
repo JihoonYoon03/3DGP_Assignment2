@@ -6,6 +6,7 @@
 #include <random>
 #include <queue>
 #include <algorithm>
+#include <functional>
 
 namespace {
 	// Wolfenstein ǳ �̷��� �⺻ ����.
@@ -668,4 +669,126 @@ std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 	const size_t take = (candidates.size() < cap) ? candidates.size() : cap;
 	result.assign(candidates.begin(), candidates.begin() + take);
 	return result;
+}
+
+// =====================================================================================
+// A* 길찾기 — 그리드 셀 기반 최단 경로 탐색
+// =====================================================================================
+std::vector<XMFLOAT3> FindPathAStar(
+    SceneState state,
+    const XMFLOAT3& start,
+    const XMFLOAT3& goal,
+    int nMaxNodes)
+{
+    if (state != SceneState::MAP1 && state != SceneState::MAP2) return {};
+
+    const std::vector<std::string>& grid =
+        (state == SceneState::MAP1) ? Map1Grid() : Map2Grid();
+    const int rows = static_cast<int>(grid.size());
+    const int cols = static_cast<int>(grid[0].size());
+    const float halfX = (cols - 1) * TILE * 0.5f;
+    const float halfZ = (rows - 1) * TILE * 0.5f;
+
+    // 월드 좌표 → 그리드 (열, 행) 변환
+    auto WorldToGrid = [&](const XMFLOAT3& pos, int& outC, int& outR) {
+        outC = static_cast<int>(floorf((pos.x + halfX) / TILE + 0.5f));
+        outR = static_cast<int>(floorf((pos.z + halfZ) / TILE + 0.5f));
+    };
+
+    // 그리드 (열, 행) → 월드 좌표 중심점 변환
+    auto GridToWorld = [&](int c, int r) -> XMFLOAT3 {
+        const float worldX = c * TILE - halfX;
+        const float worldZ = r * TILE - halfZ;
+        const float floorY = GetFloorHeightAt(state, worldX, worldZ);
+        return XMFLOAT3(worldX, floorY, worldZ);
+    };
+
+    int startC, startR, goalC, goalR;
+    WorldToGrid(start, startC, startR);
+    WorldToGrid(goal,  goalC,  goalR);
+
+    // 범위 체크
+    if (startC < 0 || startC >= cols || startR < 0 || startR >= rows) return {};
+    if (goalC  < 0 || goalC  >= cols || goalR  < 0 || goalR  >= rows) return {};
+    if (startC == goalC && startR == goalR) return {};
+
+    // 셀 통과 가능 여부: 'W' 만 불통 (단차는 TryMoveXZ 점프가 처리)
+    auto isWalkable = [&](int c, int r) -> bool {
+        if (c < 0 || c >= cols || r < 0 || r >= rows) return false;
+        return grid[r][c] != 'W';
+    };
+
+    // 평탄화 인덱스 헬퍼
+    auto idx2 = [&](int c, int r) -> int { return r * cols + c; };
+    const int N = rows * cols;
+
+    // A* 상태 배열
+    std::vector<float> gCost(N, 1e30f);
+    std::vector<bool>  closed(N, false);
+    std::vector<int>   parent(N, -1);  // 부모 셀 평탄화 인덱스
+
+    // 오픈셋: {f, 평탄화 인덱스}  (min-heap)
+    using PQItem = std::pair<float, int>;
+    std::priority_queue<PQItem, std::vector<PQItem>, std::greater<PQItem>> openSet;
+
+    auto heuristic = [&](int c, int r) -> float {
+        // 맨해튼 거리 × 셀 크기
+        return static_cast<float>(abs(c - goalC) + abs(r - goalR)) * TILE;
+    };
+
+    const int startIdx = idx2(startC, startR);
+    gCost[startIdx] = 0.0f;
+    openSet.emplace(heuristic(startC, startR), startIdx);
+
+    // 4방향 이웃 (대각선 제외 — 벽 모서리 통과 방지)
+    const int dc[4] = {  0,  0,  1, -1 };
+    const int dr[4] = {  1, -1,  0,  0 };
+
+    int nodesExpanded = 0;
+    const int goalIdx = idx2(goalC, goalR);
+
+    while (!openSet.empty() && nodesExpanded < nMaxNodes) {
+        const PQItem topItem = openSet.top();
+        const int   curIdx   = topItem.second;
+        openSet.pop();
+
+        if (closed[curIdx]) continue;
+        closed[curIdx] = true;
+        ++nodesExpanded;
+
+        if (curIdx == goalIdx) {
+            // 경로 역추적 (start 제외, goal 포함)
+            std::vector<XMFLOAT3> path;
+            int pIdx = goalIdx;
+            while (pIdx != startIdx) {
+                const int pc = pIdx % cols;
+                const int pr = pIdx / cols;
+                path.push_back(GridToWorld(pc, pr));
+                pIdx = parent[pIdx];
+                if (pIdx < 0) break;  // 안전망
+            }
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+
+        const int cc = curIdx % cols;
+        const int cr = curIdx / cols;
+
+        for (int i = 0; i < 4; ++i) {
+            const int nc = cc + dc[i];
+            const int nr = cr + dr[i];
+            if (!isWalkable(nc, nr)) continue;
+            const int nIdx = idx2(nc, nr);
+            if (closed[nIdx]) continue;
+
+            const float newG = gCost[curIdx] + TILE;
+            if (newG < gCost[nIdx]) {
+                gCost[nIdx]  = newG;
+                parent[nIdx] = curIdx;
+                openSet.emplace(newG + heuristic(nc, nr), nIdx);
+            }
+        }
+    }
+
+    return {};  // 도달 불가
 }

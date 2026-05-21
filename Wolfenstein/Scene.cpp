@@ -17,24 +17,33 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 
 	// ��Ʈ �Ķ����: [0] ���� ��ȯ ��� (32��Ʈ ��� 16��)
 	//                [1] ��/���� ��� (32��Ʈ ��� 32��)
-	D3D12_ROOT_PARAMETER pd3dRootParameters[2];
+	D3D12_ROOT_PARAMETER pd3dRootParameters[3];
+	// [0] b0: 월드 변환 행렬 (VS 전용, 16 floats)
 	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	pd3dRootParameters[0].Constants.Num32BitValues = 16;
 	pd3dRootParameters[0].Constants.ShaderRegister = 0;
 	pd3dRootParameters[0].Constants.RegisterSpace = 0;
 	pd3dRootParameters[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	// [1] b1: View+Projection (VS 전용, 32 floats)
 	pd3dRootParameters[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	pd3dRootParameters[1].Constants.Num32BitValues = 32;
 	pd3dRootParameters[1].Constants.ShaderRegister = 1;
 	pd3dRootParameters[1].Constants.RegisterSpace = 0;
 	pd3dRootParameters[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	// [2] b2: 라이트 정보 (PS 에서 접근). float3 lightDir + float3 lightColor + float3 ambient
+	//        16-byte 패딩 정렬을 맞추기 위해 각 float3 뒤에 pad float 를 두어 12 floats(=3*4) 사용.
+	pd3dRootParameters[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	pd3dRootParameters[2].Constants.Num32BitValues = 12;
+	pd3dRootParameters[2].Constants.ShaderRegister = 2;
+	pd3dRootParameters[2].Constants.RegisterSpace = 0;
+	pd3dRootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+	// PS 에서 b2(라이트 상수) 접근이 필요하므로 DENY_PIXEL_SHADER_ROOT_ACCESS 제거.
 	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags =
 		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
 	D3D12_ROOT_SIGNATURE_DESC d3dRootSignatureDesc;
 	::ZeroMemory(&d3dRootSignatureDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
@@ -224,6 +233,20 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	pCamera->SetViewportsAndScissorRects(pd3dCommandList);
 	pd3dCommandList->SetGraphicsRootSignature(m_pd3dGraphicsRootSignature.Get());
 	pCamera->UpdateShaderVariables(pd3dCommandList);
+
+	// ===== 라이트 상수 업로드 (b2) =====
+	// HLSL cbLightInfo 와 동일한 12 float (3 * vec4 패딩) 레이아웃.
+	// 방향광 진행 방향은 정규화하여 셰이더에서 dot 계산이 일관되도록 한다.
+	{
+		XMVECTOR vDir = XMVector3Normalize(XMLoadFloat3(&m_xmf3LightDir));
+		XMFLOAT3 lightDirN; XMStoreFloat3(&lightDirN, vDir);
+		float lightConstants[12] = {
+			lightDirN.x, lightDirN.y, lightDirN.z, 0.0f,
+			m_xmf3LightColor.x, m_xmf3LightColor.y, m_xmf3LightColor.z, 0.0f,
+			m_xmf3Ambient.x,    m_xmf3Ambient.y,    m_xmf3Ambient.z,    0.0f
+		};
+		pd3dCommandList->SetGraphicsRoot32BitConstants(2, 12, lightConstants, 0);
+	}
 
 	if (m_eCurrentState == SceneState::MAP_SELECT) {
 		// MAP_SELECT ������ ���� �ΰ��� ���� �׸��� �ʰ�, MAP1/MAP2 �� �̴Ͼ�ó�� �׸���.
