@@ -257,7 +257,7 @@ namespace {
 	constexpr float kMiniOffsetX = 28.0f;       // �¿� �߽����κ����� X ������
 	constexpr float kMiniScale   = 0.18f;       // 30x30 ��(120 ����)�� ~21 �������� ���
 	constexpr float kHoverScale  = 1.18f;       // ȣ�� �� ũ�� ����
-	constexpr float kMiniTiltDeg = 45.0f;       // X �� ���� (������ ���� ����)
+	constexpr float kMiniTiltDeg = 90.0f;       // X축 기울임. 90° = 바닥에 누운 top-down 시점. 45° 정도면 비스듬한 입체.
 
 	XMMATRIX BuildMiniatureMatrix(float xOffset, float fSpinAngle, bool bHovered)
 	{
@@ -320,8 +320,8 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	// 빌드되어 있어 별도 작업 없이 RenderInParent 만 호출하면 됨.
 	if (m_eCurrentState == SceneState::LANDING) {
 		constexpr float kPreviewScale   = 0.18f;
-		constexpr float kPreviewTiltDeg = 55.0f;
-		constexpr float kPreviewYawDeg  = 25.0f;
+		constexpr float kPreviewTiltDeg = 90.0f;   // X축 기울임. 90° = top-down. 55° 정도면 비스듬한 입체.
+		constexpr float kPreviewYawDeg  = 25.0f;   // Y축 회전 (위에서 봤을 때 미로의 방향 회전).
 		constexpr float kPreviewOffsetX = 0.0f;
 		constexpr float kPreviewOffsetY = -3.0f;
 		constexpr float kPreviewOffsetZ = 0.0f;
