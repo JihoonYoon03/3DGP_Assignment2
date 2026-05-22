@@ -380,7 +380,18 @@ void CObjectsShader::ReleaseObjects()
 
 void CObjectsShader::AnimateObjects(float fTimeElapsed)
 {
-	for (auto& pObject : m_vObjects) {
+	// [Claude] CEnemyObject::Animate 가 m_fnFire 콜백으로 SpawnEnemyBullet 을 호출하면
+	// 같은 m_vObjects 에 push_back 이 발생한다. capacity 초과 시 재할당이 일어나
+	// range-for 의 참조/이터레이터가 무효화되고, 다음 반복의 pObject->IsAlive() 가
+	// 해제된 메모리를 읽어 액세스 위반이 발생한다(보고된 AV 의 원인).
+	//
+	// 대응:
+	//  1) 시작 시점 객체 수를 스냅샷으로 잡아 이번 프레임에 새로 추가된 총알은
+	//     다음 프레임부터 Animate. (스폰 후 이동 시작이 1 프레임 늦지만 16ms 수준)
+	//  2) 매 반복마다 shared_ptr 사본을 잡아 슬롯이 재배치되어도 객체가 살아있게.
+	const size_t nCount = m_vObjects.size();
+	for (size_t i = 0; i < nCount; ++i) {
+		std::shared_ptr<CGameObject> pObject = m_vObjects[i];
 		if (!pObject || !pObject->IsAlive()) continue;
 		pObject->Animate(fTimeElapsed);
 	}
@@ -432,7 +443,7 @@ void CObjectsShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature*
 void CObjectsShader::ReleaseUploadBuffers()
 {
 	for (auto& pObject : m_vObjects) {
-		pObject->ReleaseUploadBuffers();
+		if (pObject) pObject->ReleaseUploadBuffers();
 	}
 }
 
@@ -451,6 +462,7 @@ void CObjectsShader::RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, 
 	CShader::Render(pd3dCommandList, pCamera);
 
 	for (auto& pObjects : m_vObjects) {
+		if (!pObjects || !pObjects->IsAlive()) continue;
 		pObjects->RenderInParent(pd3dCommandList, pCamera, xmf4x4Parent);
 	}
 }
