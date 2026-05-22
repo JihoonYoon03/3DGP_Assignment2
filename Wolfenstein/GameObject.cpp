@@ -11,9 +11,13 @@ CGameObject::CGameObject()
 
 CGameObject::~CGameObject()
 {
-	if (m_pShader) {
-		m_pShader->ReleaseShaderVariables();
-	}
+	// [Claude] 이전: 여기서 m_pShader->ReleaseShaderVariables() 를 호출했으나
+	// m_pShader 는 여러 GameObject 가 공유하는 shared_ptr 이다 (예: m_pHudShader
+	// 는 십자선/라이프 바/카운트 점/WIN 글자 30+ 개가 공유). 호출이 base 에선
+	// no-op 라 현재는 무해하지만, 후속 셰이더 서브클래스가 일회용 자원 해제를
+	// 여기 구현하면 동일 셰이더에 대해 30+ 번 호출되어 더블-프리 위험이 생긴다.
+	// 셰이더 자체 자원은 shared_ptr 의 마지막 참조가 풀릴 때 CShader::~CShader
+	// 가 책임지면 충분하므로 여기서는 호출하지 않는다.
 }
 
 void CGameObject::SetShader(std::shared_ptr<CShader> pShader)
