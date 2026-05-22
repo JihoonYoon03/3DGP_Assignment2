@@ -68,6 +68,11 @@ public:
 	// TPS: 플레이어 모델 우측 어깨 옆, 조준선(aim) 방향 정렬.
 	void UpdateRifleTransform();
 
+	// 조준점(화면 중앙)에서 광선을 쏴 첫 충돌점(벽 또는 살아있는 적 AABB) 의
+	// 월드 좌표를 반환한다. 충돌이 없으면 카메라 forward * kMaxAimDist 폴백.
+	// UpdateRifleTransform 과 FireBullet 이 호출해, 총구가 조준점을 정확히 가리키도록 한다.
+	XMFLOAT3 GetAimTargetPoint() const;
+
 	void MoveToNextFrame();
 
 	std::unique_ptr<class CCamera> m_pCamera;
@@ -196,6 +201,10 @@ private:
 	// 플레이어 모델 오른쪽 어깨 옆에 정렬된다. 총알은 이 소총의 총구에서 발사된다.
 	std::shared_ptr<CMesh>      m_pRifleMesh;
 	std::shared_ptr<CGameObject> m_pRifle;
+
+	// 적이 들고 있는 소총 메시. 플레이어 소총과 동일한 형상/색상 (어두운 회색).
+	// 적 1체당 1개의 CGameObject 가 이 메시를 공유한다 (CEnemyObject::m_pRifle).
+	std::shared_ptr<CMesh>      m_pEnemyRifleMesh;
 
 	// [Claude] 반동 애니메이션 타이머. FireBullet() 이 0.0 으로 리셋해 시작하고,
 	// UpdateRifleTransform() 이 3 개 키프레임 (뒤로 후진 → 절반 복귀 → 원위치) 으로

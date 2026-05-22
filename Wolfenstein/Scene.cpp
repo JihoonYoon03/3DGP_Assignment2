@@ -221,6 +221,23 @@ int CScene::CountAliveEnemies() const
 	return n;
 }
 
+std::vector<std::pair<XMFLOAT3, XMFLOAT3>> CScene::GetAliveEnemyAABBs() const
+{
+	std::vector<std::pair<XMFLOAT3, XMFLOAT3>> out;
+	if (m_eCurrentState != SceneState::MAP1 && m_eCurrentState != SceneState::MAP2) return out;
+	const size_t idx = static_cast<size_t>(m_eCurrentState);
+	if (idx >= m_vShaders.size()) return out;
+	for (const auto& p : m_vShaders[idx].GetObjects()) {
+		if (!p || !p->IsAlive()) continue;
+		if (p->GetTag() != EObjectTag::Enemy) continue;
+		// GetPosition 은 비-const 이므로 const_cast — 행렬 _4* 성분만 읽는 단순 접근.
+		const XMFLOAT3 c = const_cast<CGameObject*>(p.get())->GetPosition();
+		const XMFLOAT3 h = p->GetAABBHalf();
+		out.emplace_back(c, h);
+	}
+	return out;
+}
+
 void CScene::SetEnemyMarkersVisible(bool bVisible)
 {
 	if (m_eCurrentState != SceneState::MAP1 && m_eCurrentState != SceneState::MAP2) return;
@@ -297,6 +314,33 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 		m_vShaders[idx].Render(pd3dCommandList, pCamera);
 	}
 
+	// LANDING 화면: THE MAZE 글자 아래 빈 공간에 맵 1 전경 미니어처를 추가 렌더.
+	// 위쪽 뒤에서 비스듬히 내려다본 시점(scale 0.18, X축 tilt 55°, Y축 yaw 25°)으로
+	// 화면 중하단(y=-3, world units) 에 배치. MAP1 셰이더는 이미 BuildObjects 단계에서
+	// 빌드되어 있어 별도 작업 없이 RenderInParent 만 호출하면 됨.
+	if (m_eCurrentState == SceneState::LANDING) {
+		constexpr float kPreviewScale   = 0.18f;
+		constexpr float kPreviewTiltDeg = 55.0f;
+		constexpr float kPreviewYawDeg  = 25.0f;
+		constexpr float kPreviewOffsetX = 0.0f;
+		constexpr float kPreviewOffsetY = -3.0f;
+		constexpr float kPreviewOffsetZ = 0.0f;
+
+		XMMATRIX mScale = XMMatrixScaling(kPreviewScale, kPreviewScale, kPreviewScale);
+		XMMATRIX mTilt  = XMMatrixRotationX(XMConvertToRadians(kPreviewTiltDeg));
+		XMMATRIX mYaw   = XMMatrixRotationY(XMConvertToRadians(kPreviewYawDeg));
+		XMMATRIX mTrans = XMMatrixTranslation(kPreviewOffsetX, kPreviewOffsetY, kPreviewOffsetZ);
+		// row-major: v * (S * Rx * Ry * T) — BuildMiniatureMatrix 와 동일 순서.
+		XMMATRIX mPreview = XMMatrixMultiply(XMMatrixMultiply(XMMatrixMultiply(mScale, mTilt), mYaw), mTrans);
+
+		XMFLOAT4X4 xmf4x4Preview;
+		XMStoreFloat4x4(&xmf4x4Preview, mPreview);
+		const size_t map1Idx = static_cast<size_t>(SceneState::MAP1);
+		if (map1Idx < m_vShaders.size()) {
+			m_vShaders[map1Idx].RenderInParent(pd3dCommandList, pCamera, xmf4x4Preview);
+		}
+	}
+
 	// �ΰ��� �ʿ��� TPS ���� ��۵Ǿ� ������ �÷��̾� ���� �Բ� �׸���.
 	// ������ m_vShaders[MAP*].Render �� ������ ��Ʈ �ñ׳�ó�� PSO �� ���ε��� �����̹Ƿ�,
 	// CGameObject::Render �� ��ü������ ���� ����� �����ϰ� �޽ø� �׸��� ����ϴ�.
@@ -305,17 +349,24 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 		m_pPlayerModel->Render(pd3dCommandList, pCamera);
 	}
 
-	// 잔여 적 ≤3 마리 모드일 때, 살아있는 적의 머리 위 마커 기둥을 추가 렌더한다.
-	// CObjectsShader 의 PSO 가 그대로 바인딩되어 있어 동일 파이프라인으로 그릴 수 있다.
+	// 살아있는 적별로 추가 객체(마커 + 소총) 를 그린다. CObjectsShader 의 PSO 가
+	// 그대로 바인딩되어 있어 동일 파이프라인으로 그릴 수 있다.
+	// - 마커: m_bMarkerVisible 이 true 일 때만 (잔여 적 ≤5 모드).
+	// - 소총: 항상 표시 (적이 보이면 총도 보임).
 	if ((m_eCurrentState == SceneState::MAP1 || m_eCurrentState == SceneState::MAP2)
 		&& idx < m_vShaders.size()) {
 		for (auto& p : m_vShaders[idx].GetObjects()) {
 			if (!p || !p->IsAlive()) continue;
 			if (p->GetTag() != EObjectTag::Enemy) continue;
 			auto* pEnemy = static_cast<CEnemyObject*>(p.get());
-			if (!pEnemy->IsMarkerVisible()) continue;
-			CGameObject* pMarker = pEnemy->GetMarker();
-			if (pMarker) pMarker->Render(pd3dCommandList, pCamera);
+			if (pEnemy->IsMarkerVisible()) {
+				if (CGameObject* pMarker = pEnemy->GetMarker()) {
+					pMarker->Render(pd3dCommandList, pCamera);
+				}
+			}
+			if (CGameObject* pRifle = pEnemy->GetRifle()) {
+				pRifle->Render(pd3dCommandList, pCamera);
+			}
 		}
 	}
 }

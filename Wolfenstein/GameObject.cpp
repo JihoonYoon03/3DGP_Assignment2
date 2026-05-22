@@ -542,13 +542,28 @@ void CEnemyObject::Animate(float fTimeElapsed)
 				TryMoveXZ(moveDir, kStep);
 			}
 
-			// 발사 쿨다운이 끝나면 플레이어 직선 방향으로 총알 발사.
+			// 발사 쿨다운이 끝나면 총알 발사. 소총이 있으면 총구 위치/방향에서,
+			// 없으면 가슴 높이 폴백. 총구 방향과 총알 방향이 일치해야 시각적으로 자연스럽다.
 			if (m_fFireCooldown <= 0.0f && m_fnFire) {
-				const XMFLOAT3 muzzle{
-					myPos.x + dir.x * 0.8f,
-					myPos.y + 0.2f,
-					myPos.z + dir.z * 0.8f };
-				m_fnFire(muzzle, dir);
+				XMFLOAT3 muzzle;
+				XMFLOAT3 fireDir = dir; // 폴백: 플레이어 방향 (XZ 단위벡터)
+				if (m_pRifle) {
+					const XMFLOAT3 rpos = m_pRifle->GetPosition();
+					const XMFLOAT3 rfwd = m_pRifle->GetLook(); // +Z = 총구 방향
+					constexpr float kMuzzle = 0.7f; // 메시 깊이 1.2 의 절반 + 약간 (플레이어와 동일)
+					muzzle = XMFLOAT3{
+						rpos.x + rfwd.x * kMuzzle,
+						rpos.y + rfwd.y * kMuzzle,
+						rpos.z + rfwd.z * kMuzzle };
+					fireDir = rfwd;
+				}
+				else {
+					muzzle = XMFLOAT3{
+						myPos.x + dir.x * 0.8f,
+						myPos.y + 0.2f,
+						myPos.z + dir.z * 0.8f };
+				}
+				m_fnFire(muzzle, fireDir);
 				m_fFireCooldown = RandFloat(2.0f, 3.0f);
 				m_fAimFreeze = 0.3f;
 			}
@@ -568,6 +583,28 @@ void CEnemyObject::Animate(float fTimeElapsed)
 		markerPos.y += m_xmf3AABBHalf.y + 7.0f;
 		m_pMarker->SetPosition(markerPos);
 	}
+
+	// 오른손 소총 transform 동기화. 플레이어를 향하는 XZ 단위 dir 의 우측으로 0.85,
+	// dir 방향으로 0.4 떨어진 가슴 높이에 배치하고 +Z 가 플레이어를 향하게 회전.
+	// 적이 보이면 총도 같이 보임 — 가시성 토글 없이 항상 위치만 동기화.
+	if (m_pRifle) {
+		XMFLOAT3 myPos = GetPosition();
+		XMFLOAT3 toPlayer{ 0.0f, 0.0f, 1.0f };
+		if (m_fnGetPlayer) {
+			const XMFLOAT3 pp = m_fnGetPlayer();
+			toPlayer = XMFLOAT3{ pp.x - myPos.x, 0.0f, pp.z - myPos.z };
+		}
+		float len = sqrtf(toPlayer.x * toPlayer.x + toPlayer.z * toPlayer.z);
+		if (len > 1e-5f) { toPlayer.x /= len; toPlayer.z /= len; }
+		else             { toPlayer = XMFLOAT3{ 0.0f, 0.0f, 1.0f }; }
+		// dir 의 우측 (월드 +Y 기준 외적: (dir × up) 는 dir 의 우측)
+		const XMFLOAT3 right{ -toPlayer.z, 0.0f, toPlayer.x };
+		const XMFLOAT3 riflePos{
+			myPos.x + right.x * 0.85f + toPlayer.x * 0.4f,
+			myPos.y - m_xmf3AABBHalf.y + 1.6f, // 가슴 높이 (몸 바닥 + 1.6)
+			myPos.z + right.z * 0.85f + toPlayer.z * 0.4f };
+		m_pRifle->SetWorldOrientation(toPlayer, riflePos); // +Z = 총구 방향 = 플레이어 방향
+	}
 }
 
 void CEnemyObject::OnHit(CGameObject* /*pOther*/)
@@ -586,4 +623,12 @@ void CEnemyObject::SetMarkerMesh(std::shared_ptr<CMesh> pMesh)
 	// 가시성은 m_bMarkerVisible 플래그로 토글되며 Scene::Render 가 분기 처리.
 	m_pMarker = std::make_shared<CGameObject>();
 	m_pMarker->SetMesh(std::move(pMesh));
+}
+
+void CEnemyObject::SetRifleMesh(std::shared_ptr<CMesh> pMesh)
+{
+	// 적 소총은 마커와 동일 패턴: 적과 별도의 CGameObject. Animate 에서 위치/회전을
+	// 매 프레임 오른손 위치(플레이어 방향 우측 + 전방) 에 동기화한다. 항상 표시.
+	m_pRifle = std::make_shared<CGameObject>();
+	m_pRifle->SetMesh(std::move(pMesh));
 }
