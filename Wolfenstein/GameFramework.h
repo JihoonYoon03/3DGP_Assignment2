@@ -4,6 +4,7 @@
 
 #include "Timer.h"
 #include "Maps.h"
+#include "Player.h"
 
 class CGameObject;
 
@@ -155,21 +156,18 @@ private:
 	bool m_bMouseCaptured = false;
 	POINT m_ptWndCenterScreen{ 0, 0 };
 
-	// ����/�߷� ����.
-	// m_fVerticalVelocity: ���� �ӵ�(����/sec). 0���� ũ�� ��� ��.
-	// m_bGrounded: ���� �ٴڿ� ��� �ִ��� ����.
-	// m_bPrevSpacePressed: �����̽� Ű�� edge ����� ���� ������ ����.
-	float m_fVerticalVelocity = 0.0f;
-	bool m_bGrounded = true;
+	// 점프/중력 입력 상태.
+	// m_bPrevSpacePressed: 스페이스 키 edge 검출용 이전 프레임 상태.
+	// 점프 속도/접지 여부는 m_pPlayer (CPlayer/CCharacter) 가 보유.
 	bool m_bPrevSpacePressed = false;
 
-	// === �÷��̾� ��ġ �� ���� ��� (�䱸 C) ===
-	// m_xmf3PlayerPos: �÷��̾��� ���� �ִ� ��ġ(������ ����). ī�޶� TPS �� ��
-	// �ڷ� ���� ��ġ�� �̵��ϴ���, �̵�/�浹/�߷��� �� ������ ����Ѵ�.
-	// m_pPlayerModel: TPS ��忡���� �׷����� �÷��̾��� �ð� ��(���� ť��).
-	// m_bPrevVPressed: 'V' Ű�� edge ������ OnProcessingKeyboardMessage WM_KEYUP ���� ó���ϹǷ� ���� �ʿ� ������,
-	// ���� Ȯ���� ���� ����.
-	XMFLOAT3 m_xmf3PlayerPos{ 0.0f, MAP_EYE_HEIGHT, 0.0f };
+	// === 플레이어 객체 ===
+	// CPlayer 인스턴스. 위치/HP/소총/점프/반동 등 플레이어 상태를 모두 보유.
+	// CCharacter 를 상속하므로 적(CEnemyObject) 과 동일한 인터페이스(HP, 점프
+	// 물리, TryMoveXZ) 를 공유한다. 입력/카메라/HUD 등 외부 시스템 연결만
+	// CGameFramework 가 담당.
+	// m_pPlayerModel: TPS 모드에서 그려지는 플레이어의 시각 모델(보라 큐브).
+	std::shared_ptr<CPlayer> m_pPlayer;
 	std::shared_ptr<CGameObject> m_pPlayerModel;
 
 	// === Shooting / crosshair ===
@@ -178,43 +176,31 @@ private:
 	// Cooldown so a held click does not spew bullets every frame.
 	float m_fFireCooldown = 0.0f;
 	// 화면 정중앙에 회전 없이 고정되는 십자선(+) 조준점.
-	// CCrosshairMesh(NDC 좌표) + CHudShader(월드/뷰/투영 무시) 조합으로 그려지므로
-	// 매 프레임 위치/회전 갱신 없이 항상 화면 정가운데에 표시된다.
 	std::shared_ptr<CGameObject> m_pCrosshair;
 
-	// === 적 / 라이프 시스템 ===
+	// === 적 / 라이프 UI ===
 	// m_pEnemyMesh: 모든 적이 공유하는 큐브 메시. 색은 어두운 보라 계열.
-	// m_pEnemyBulletMesh: 적 총알 전용 메시. 플레이어 총알과 색을 구분 (붉은 계열).
+	// m_pEnemyBulletMesh: 적 총알 전용 메시.
 	// m_pHudShader: 십자선과 라이프 바 칸이 공유하는 HUD 셰이더.
-	// m_pLifeBarSegments: 라이프 칸 10개. m_nPlayerLife 개수만큼 앞에서부터 렌더.
-	// m_nPlayerLife: 남은 라이프. 적 총알 1발에 1 감소. 0 이 되면 LANDING 으로 복귀.
+	// m_pLifeBarSegments: 라이프 칸 10개. m_pPlayer->GetHP() 개수만큼 앞에서부터 렌더.
 	// m_bResetPending: 라이프 0 으로 죽었을 때 다음 프레임에 LANDING 으로 보낼 트리거.
 	std::shared_ptr<CMesh>   m_pEnemyMesh;
 	std::shared_ptr<CMesh>   m_pEnemyBulletMesh;
 	std::shared_ptr<CShader> m_pHudShader;
 	std::vector<std::shared_ptr<CGameObject>> m_pLifeBarSegments;
-	int  m_nPlayerLife = 10;
 	bool m_bResetPending = false;
 
-	// === 소총 ===
-	// 플레이어가 들고 있는 가늘고 긴 직육면체. FPS 에선 화면 우측 하단, TPS 에선
-	// 플레이어 모델 오른쪽 어깨 옆에 정렬된다. 총알은 이 소총의 총구에서 발사된다.
+	// === 소총 메시 ===
+	// 플레이어 소총 객체 자체는 m_pPlayer->GetRifle() 로 접근.
+	// 적 소총은 적 1체당 1개의 CGameObject 가 이 메시를 공유 (CEnemyObject::m_pRifle).
 	std::shared_ptr<CMesh>      m_pRifleMesh;
-	std::shared_ptr<CGameObject> m_pRifle;
-
-	// 적이 들고 있는 소총 메시. 플레이어 소총과 동일한 형상/색상 (어두운 회색).
-	// 적 1체당 1개의 CGameObject 가 이 메시를 공유한다 (CEnemyObject::m_pRifle).
 	std::shared_ptr<CMesh>      m_pEnemyRifleMesh;
 
-	// [Claude] 반동 애니메이션 타이머. FireBullet() 이 0.0 으로 리셋해 시작하고,
-	// UpdateRifleTransform() 이 3 개 키프레임 (뒤로 후진 → 절반 복귀 → 원위치) 으로
-	// 소총 위치에 forward-방향 오프셋을 더한다. 실제 발사 로직(데미지/속도/방향)
-	// 에는 영향이 없으며, 시각적 반동 연출만 담당. 음수면 비활성.
+	// 반동 애니메이션 지속 시간 (CPlayer::TickRecoil 에 전달).
 	// 키프레임:  t=0.00  offset= 0.00
 	//            t=0.06  offset=-0.30  (최대 뒤로 후진)
 	//            t=0.14  offset=-0.10  (절반 복귀)
 	//            t=0.25  offset= 0.00  (원위치)
-	float m_fRecoilTimer = -1.0f;
 	static constexpr float kRecoilDuration = 0.25f;
 
 	// === 적 잔여 수 점 카운트(좌상단) ===

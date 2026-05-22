@@ -361,8 +361,16 @@ void CGameFramework::BuildObjects()
 	m_pRifleMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		0.18f, 0.18f, 1.2f, true, XMFLOAT4(0.25f, 0.25f, 0.28f, 1.0f));
-	m_pRifle = std::make_shared<CGameObject>();
-	m_pRifle->SetMesh(m_pRifleMesh);
+
+	// 플레이어 객체 생성. 소총 객체(CGameObject)를 직접 부착해
+	// m_pPlayer->GetRifle() 로 접근 가능하게 한다.
+	m_pPlayer = std::make_shared<CPlayer>();
+	{
+		auto pRifleObj = std::make_shared<CGameObject>();
+		pRifleObj->SetMesh(m_pRifleMesh);
+		m_pPlayer->SetRifleObject(std::move(pRifleObj));
+	}
+	m_pPlayer->SetPosition(XMFLOAT3{ 0.0f, MAP_EYE_HEIGHT, 0.0f });
 
 	// 적 소총 메시: 플레이어 소총과 동일한 형상/색상. 적 인스턴스마다 공유된다.
 	m_pEnemyRifleMesh = std::make_shared<CCubeMeshDiffused>(
@@ -396,8 +404,8 @@ void CGameFramework::BuildObjects()
 		m_pCrosshair->SetShader(m_pHudShader);
 	}
 
-	// ������ �� ĭ 10�� ����. ��� ���� ��(����)���� �����, �� ������ m_nPlayerLife
-	// ������ŭ �տ������͸� �����Ͽ� ���� ĭ�� �׸��� �ʴ´�.
+	// 라이프 바 칸 10개 생성. 모두 동일 모양(빨강)으로 만들고, 매 프레임 m_pPlayer->GetHP()
+	// 개수만큼 앞에서부터 렌더하여 빈 칸은 그리지 않는다.
 	m_pLifeBarSegments.reserve(10);
 	for (UINT i = 0; i < 10u; ++i) {
 		auto pSegMesh = std::make_shared<CLifeBarMesh>(
@@ -525,8 +533,9 @@ void CGameFramework::BuildObjects()
 	// ������ ���� �ݹ� ���. Scene ���� EnemyBullet �� Player �浹 �� ȣ��ȴ�.
 	if (m_pScene) {
 		m_pScene->SetOnPlayerHit([this]() {
-			if (m_nPlayerLife > 0) --m_nPlayerLife;
-			if (m_nPlayerLife <= 0) m_bResetPending = true;
+			if (!m_pPlayer) return;
+			if (m_pPlayer->GetHP() > 0) m_pPlayer->TakeDamage(1);
+			if (m_pPlayer->GetHP() <= 0) m_bResetPending = true;
 		});
 	}
 
@@ -720,11 +729,8 @@ void CGameFramework::ProcessInput()
 	// Tick the shoot cooldown so the next click can fire when this hits 0.
 	if (m_fFireCooldown > 0.0f) m_fFireCooldown -= m_GameTimer.GetTimeElapsed();
 
-	// [Claude] 반동 애니메이션 타이머 진행. kRecoilDuration 초과 시 비활성화(-1).
-	if (m_fRecoilTimer >= 0.0f) {
-		m_fRecoilTimer += m_GameTimer.GetTimeElapsed();
-		if (m_fRecoilTimer >= kRecoilDuration) m_fRecoilTimer = -1.0f;
-	}
+	// 반동 애니메이션 타이머 진행 — CPlayer 가 보유.
+	if (m_pPlayer) m_pPlayer->TickRecoil(m_GameTimer.GetTimeElapsed(), kRecoilDuration);
 
 	const bool bForeground = (::GetForegroundWindow() == m_hWnd);
 
@@ -760,8 +766,9 @@ void CGameFramework::ProcessInput()
 	}
 
 	// =============== WASD + ?�� (XZ) ===============
-	// ???? ??? ?��???? ????? m_xmf3PlayerPos. ???? TPS ?? ?? ??? ???? ????? ????????,
-	// ???/?��/??? ?????? ??? m_xmf3PlayerPos ?? ???? ???????.
+	// 이동의 권위 있는 위치는 m_pPlayer 의 위치 (GetPosition/SetPosition). TPS 일 때
+	// 카메라는 뒤로 살짝 떨어진 위치로 이동하지만, 이동/충돌/중력은 모두 플레이어의
+	// 위치를 직접 갱신한다.
 	const float dt = m_GameTimer.GetTimeElapsed();
 	const float kMoveSpeed = 6.0f;
 	const float kStep = kMoveSpeed * dt;
@@ -772,7 +779,7 @@ void CGameFramework::ProcessInput()
 	if (::GetAsyncKeyState('D') & 0x8000) fStrafe  += 1.0f;
 	if (::GetAsyncKeyState('A') & 0x8000) fStrafe  -= 1.0f;
 
-	XMFLOAT3 pos = m_xmf3PlayerPos;
+	XMFLOAT3 pos = m_pPlayer->GetPosition();
 	XMFLOAT3 next = pos;
 	const float kPlayerRadius = 1.0f;
 	const float kFeetY = pos.y - MAP_EYE_HEIGHT;
@@ -810,44 +817,46 @@ void CGameFramework::ProcessInput()
 	const float kJumpV0 = sqrtf(2.0f * kGravity * kJumpApex);
 
 	const bool bSpaceNow = (::GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
-	if (bSpaceNow && !m_bPrevSpacePressed && m_bGrounded) {
-		m_fVerticalVelocity = kJumpV0;
-		m_bGrounded = false;
+	if (bSpaceNow && !m_bPrevSpacePressed && m_pPlayer->IsGrounded()) {
+		m_pPlayer->SetVerticalVelocity(kJumpV0);
+		m_pPlayer->SetGrounded(false);
 	}
 	m_bPrevSpacePressed = bSpaceNow;
 
 	const float floorYAtNext = GetFloorHeightAt(state, next.x, next.z);
 	const float groundY = floorYAtNext + MAP_EYE_HEIGHT;
 
-	if (!m_bGrounded) {
-		// ????: ??? ????, y ????.
-		m_fVerticalVelocity -= kGravity * dt;
-		next.y = pos.y + m_fVerticalVelocity * dt;
+	if (!m_pPlayer->IsGrounded()) {
+		// 공중: 중력 적용, y 갱신.
+		float vy = m_pPlayer->GetVerticalVelocity() - kGravity * dt;
+		m_pPlayer->SetVerticalVelocity(vy);
+		next.y = pos.y + vy * dt;
 		if (next.y <= groundY) {
 			next.y = groundY;
-			m_fVerticalVelocity = 0.0f;
-			m_bGrounded = true;
+			m_pPlayer->SetVerticalVelocity(0.0f);
+			m_pPlayer->SetGrounded(true);
 		}
 	}
 	else {
-		// ????: ?? ????? ???? ?? ??? ???? (??? ????????? ????????).
+		// 지상: 다음 위치 바닥에 스냅 (계단 자연스러운 등반/낙하).
 		next.y = groundY;
 	}
 
-	// ???? ??? ?��???? ??? ????.
-	m_xmf3PlayerPos = next;
+	// 최종 위치 갱신은 CPlayer 에 일임한다.
+	m_pPlayer->SetPosition(next);
 
-	// ???? ????? ??? ???? ?��?.
+	// 카메라 모드에 맞춰 위치 갱신.
+	const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 	if (m_pCamera->GetMode() == ECameraMode::FPS) {
-		// FPS: ???? ??? = ?��???? ?? ???.
-		m_pCamera->SetPosition(m_xmf3PlayerPos);
+		// FPS: 카메라 위치 = 플레이어의 눈 위치.
+		m_pCamera->SetPosition(playerPos);
 		// Keep the (invisible) player model aligned with camera yaw so that
 		// flipping to TPS looks consistent immediately.
 		if (m_pPlayerModel) {
 			XMFLOAT3 modelCenter{
-				m_xmf3PlayerPos.x,
-				m_xmf3PlayerPos.y - MAP_EYE_HEIGHT + 1.3f,
-				m_xmf3PlayerPos.z };
+				playerPos.x,
+				playerPos.y - MAP_EYE_HEIGHT + 1.3f,
+				playerPos.z };
 			m_pPlayerModel->SetWorldYawAndPosition(m_pCamera->GetYaw(), modelCenter);
 		}
 	}
@@ -878,26 +887,30 @@ void CGameFramework::ProcessInput()
 		// 플레이어 아래에 두면 카메라가 위를 바라보게 되어 FPS 와 동일하게 작동한다.
 		const float horizBack = kBack * cosf(pitch);
 		const float vertBack  = -kBack * sinf(pitch);
-		const float eyeY      = m_xmf3PlayerPos.y + vertBack + kUp;
+		const float eyeY      = playerPos.y + vertBack + kUp;
 
 		// 카메라-플레이어 사이 벽이 있으면 수평 거리를 클램프해 카메라 관통을 막는다.
 		const float dist = ClampDistanceAgainstWalls(
-			state, m_xmf3PlayerPos, backDir, horizBack, eyeY);
+			state, playerPos, backDir, horizBack, eyeY);
 
 		XMFLOAT3 tpsEye{
-			m_xmf3PlayerPos.x + backDir.x * dist,
+			playerPos.x + backDir.x * dist,
 			eyeY,
-			m_xmf3PlayerPos.z + backDir.z * dist };
+			playerPos.z + backDir.z * dist };
 
-		// 카메라는 항상 플레이어를 바라본다. m_fPitch / m_fYaw 는 궤도 각도로 그대로
-		// 유지되므로 다음 Rotate() 가 자연스럽게 누적된다 (SetPositionAndTarget 보장).
-		m_pCamera->SetPositionAndTarget(tpsEye, m_xmf3PlayerPos);
+		// [Claude] 카메라 forward 를 m_fYaw/m_fPitch 기반 조준 방향으로 설정한다.
+		// SetPositionAndTarget(tpsEye, playerPos) 를 사용하면 카메라가 플레이어를
+		// 바라보게 되어 화면 중앙 십자선이 가리키는 방향(카메라 forward) 과 조준
+		// 광선이 사용하는 방향(yaw/pitch) 이 불일치한다. SetPosition 만 호출하면
+		// RegenerateViewMatrix 가 yaw/pitch 로부터 look 을 재계산하므로 십자선과
+		// 총알 발사 방향이 일치한다 (플레이어 모델은 화면 중앙 약간 아래로 이동).
+		m_pCamera->SetPosition(tpsEye);
 
 		if (m_pPlayerModel) {
 			XMFLOAT3 modelCenter{
-				m_xmf3PlayerPos.x,
-				m_xmf3PlayerPos.y - MAP_EYE_HEIGHT + 1.3f,
-				m_xmf3PlayerPos.z };
+				playerPos.x,
+				playerPos.y - MAP_EYE_HEIGHT + 1.3f,
+				playerPos.z };
 			m_pPlayerModel->SetWorldYawAndPosition(m_pCamera->GetYaw(), modelCenter);
 		}
 	}
@@ -977,7 +990,9 @@ XMFLOAT3 CGameFramework::GetAimTargetPoint() const
 
 void CGameFramework::UpdateRifleTransform()
 {
-	if (!m_pRifle || !m_pCamera) return;
+	if (!m_pPlayer || !m_pCamera) return;
+	CGameObject* pRifle = m_pPlayer->GetRifle();
+	if (!pRifle) return;
 	if (!m_pScene) return;
 	const SceneState st = m_pScene->GetCurrentState();
 	if (st != SceneState::MAP1 && st != SceneState::MAP2) return;
@@ -988,7 +1003,7 @@ void CGameFramework::UpdateRifleTransform()
 	const float cp = cosf(pitch);
 	const XMFLOAT3 aim{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
 
-	// [Claude] 반동 키프레임 보간. m_fRecoilTimer 가 음수면 0, 아니면 3 키프레임
+	// 반동 키프레임 보간. CPlayer 가 보유한 타이머가 음수면 0, 아니면 3 키프레임
 	// 사이에서 선형 보간하여 forward 방향 오프셋(뒤로 후진할 때 음수) 계산.
 	// 키프레임:
 	//   (0.00 s, 0.00)   — 시작
@@ -996,8 +1011,9 @@ void CGameFramework::UpdateRifleTransform()
 	//   (0.14 s, -0.10)  — 절반 복귀
 	//   (0.25 s, 0.00)   — 원위치
 	auto computeRecoilOffset = [this]() -> float {
-		if (m_fRecoilTimer < 0.0f) return 0.0f;
-		const float t = m_fRecoilTimer;
+		const float fRecoil = m_pPlayer->GetRecoilTimer();
+		if (fRecoil < 0.0f) return 0.0f;
+		const float t = fRecoil;
 		const float k0t = 0.00f, k0v = 0.00f;
 		const float k1t = 0.06f, k1v = -0.30f;
 		const float k2t = 0.14f, k2v = -0.10f;
@@ -1034,12 +1050,13 @@ void CGameFramework::UpdateRifleTransform()
 	else {
 		// TPS: 플레이어 모델 오른쪽 어깨 옆. 메시 중심 높이는 modelCenter 와 동일.
 		const XMFLOAT3 playerYawRight{ cosf(yaw), 0.0f, -sinf(yaw) };
-		const float modelCenterY = m_xmf3PlayerPos.y - MAP_EYE_HEIGHT + 1.3f;
+		const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+		const float modelCenterY = playerPos.y - MAP_EYE_HEIGHT + 1.3f;
 		// [Claude] TPS 에서도 반동 오프셋을 yaw 방향(=어깨 정면) 으로 더한다.
 		const float kBaseForward = 0.4f;
-		pos.x = m_xmf3PlayerPos.x + playerYawRight.x * 0.85f + sinf(yaw) * (kBaseForward + fRecoilOffset);
+		pos.x = playerPos.x + playerYawRight.x * 0.85f + sinf(yaw) * (kBaseForward + fRecoilOffset);
 		pos.y = modelCenterY;
-		pos.z = m_xmf3PlayerPos.z + playerYawRight.z * 0.85f + cosf(yaw) * (kBaseForward + fRecoilOffset);
+		pos.z = playerPos.z + playerYawRight.z * 0.85f + cosf(yaw) * (kBaseForward + fRecoilOffset);
 	}
 
 	// 총구가 조준점(화면 중심에서 쏜 광선의 첫 충돌점) 을 LookAt 하도록 forward 결정.
@@ -1050,7 +1067,7 @@ void CGameFramework::UpdateRifleTransform()
 	if (fl > 1e-5f) { fwd.x /= fl; fwd.y /= fl; fwd.z /= fl; }
 	else            { fwd = aim; } // 폴백: 카메라 look 방향
 
-	m_pRifle->SetWorldOrientation(fwd, pos);
+	pRifle->SetWorldOrientation(fwd, pos);
 }
 
 void CGameFramework::FireBullet()
@@ -1071,10 +1088,11 @@ void CGameFramework::FireBullet()
 	// "조준점을 향하는 방향" 이다. 총알 방향과 시각적 총구 방향이 항상 일치.
 	XMFLOAT3 origin;
 	XMFLOAT3 aim;
-	if (m_pRifle) {
-		const XMFLOAT3 rpos = m_pRifle->GetPosition();
-		const XMFLOAT3 rfwd = m_pRifle->GetLook(); // SetWorldOrientation 에서 _31..33 = forward
-		const float kMuzzle = 0.7f; // 소총 깊이 1.2 의 절반(0.6) + 약간 (총알이 메시 외부에서 시작하도록)
+	CGameObject* pRifle = m_pPlayer ? m_pPlayer->GetRifle() : nullptr;
+	if (pRifle) {
+		const XMFLOAT3 rpos = pRifle->GetPosition();
+		const XMFLOAT3 rfwd = pRifle->GetLook(); // SetWorldOrientation 에서 _31..33 = forward
+		const float kMuzzle = 0.7f;
 		origin = XMFLOAT3{
 			rpos.x + rfwd.x * kMuzzle,
 			rpos.y + rfwd.y * kMuzzle,
@@ -1082,10 +1100,11 @@ void CGameFramework::FireBullet()
 		aim = rfwd;
 	}
 	else {
+		const XMFLOAT3 playerPos = m_pPlayer ? m_pPlayer->GetPosition() : XMFLOAT3{ 0, 0, 0 };
 		origin = XMFLOAT3{
-			m_xmf3PlayerPos.x + camAim.x * 0.8f,
-			m_xmf3PlayerPos.y + 0.2f,
-			m_xmf3PlayerPos.z + camAim.z * 0.8f };
+			playerPos.x + camAim.x * 0.8f,
+			playerPos.y + 0.2f,
+			playerPos.z + camAim.z * 0.8f };
 		aim = camAim;
 	}
 
@@ -1097,9 +1116,9 @@ void CGameFramework::FireBullet()
 
 	m_fFireCooldown = 0.18f;
 
-	// [Claude] 반동 애니메이션 시작. UpdateRifleTransform 이 m_fRecoilTimer 값으로
+	// 반동 애니메이션 시작. UpdateRifleTransform 이 CPlayer 의 반동 타이머 값으로
 	// 소총 위치에 forward-방향 오프셋(뒤로)을 적용한다. 발사 동작/방향에는 영향 없음.
-	m_fRecoilTimer = 0.0f;
+	if (m_pPlayer) m_pPlayer->SetRecoilTimer(0.0f);
 }
 
 void CGameFramework::SpawnEnemyBullet(const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir)
@@ -1121,24 +1140,25 @@ void CGameFramework::SpawnEnemiesForMap(SceneState state)
 	if (!m_pScene || !m_pEnemyMesh) return;
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
 
-	// ���� AABB half y = 1.3 (��ü ���� 2.6). �÷��̾� �ݰ� 5Ÿ�� �ٱ����� ������ ����.
+	// 적 AABB half y = 1.3 (전체 높이 2.6). 플레이어 반경 5타일 바깥에서 스폰 위치 선택.
 	const float kEnemyHalfY = 1.3f;
-	std::vector<XMFLOAT3> spawns = PickEnemySpawnPositions(state, m_xmf3PlayerPos, 10, kEnemyHalfY);
+	const XMFLOAT3 playerPos = m_pPlayer ? m_pPlayer->GetPosition() : XMFLOAT3{ 0, 0, 0 };
+	std::vector<XMFLOAT3> spawns = PickEnemySpawnPositions(state, playerPos, 10, kEnemyHalfY);
 
 	std::mt19937 seedGen{ std::random_device{}() };
 	for (const XMFLOAT3& pos : spawns) {
-		// �ν��Ͻ��� �õ�� RNG ������ Ȯ��.
+		// 인스턴스별 시드로 RNG 분기를 확보.
 		const unsigned int nSeed = seedGen();
 		auto pEnemy = std::make_shared<CEnemyObject>(state, nSeed);
 		pEnemy->SetMesh(m_pEnemyMesh);
 		pEnemy->SetPosition(pos);
-		// ���� �Ѿ��� �߻��� �� ȣ��Ǵ� �ݹ� ? GameFramework �� SpawnEnemyBullet �� ����.
+		// 적이 총알을 발사할 때 호출되는 콜백 — GameFramework 의 SpawnEnemyBullet 에 연결.
 		pEnemy->SetFireCallback([this](const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir) {
 			SpawnEnemyBullet(xmf3Origin, xmf3Dir);
 		});
-		// �þ� ���� / ���� ���� ����� ���� �÷��̾��� ���� ��ġ�� �����´�.
+		// 시야 판정 / 추적 방향 계산을 위해 플레이어의 현재 위치를 가져온다.
 		pEnemy->SetPlayerPosGetter([this]() {
-			return m_xmf3PlayerPos;
+			return m_pPlayer ? m_pPlayer->GetPosition() : XMFLOAT3{ 0, 0, 0 };
 		});
 		// 머리 위 마커 메시 주입. 가시성은 AnimateObjects 가 잔여 적 수에 따라 토글한다.
 		if (m_pEnemyMarkerMesh) {
@@ -1206,18 +1226,20 @@ void CGameFramework::AnimateObjects()
 	if (m_bResetPending) {
 		m_bResetPending = false;
 		m_pScene->ResetGameplayState();
-		m_nPlayerLife = 10;
+		if (m_pPlayer) m_pPlayer->SetHP(10);
 		// 방어적으로 승리 타이머도 초기화 (정상 흐름은 이미 -1, 사망 reset 경로 대비).
 		m_fVictoryTimer = -1.0f;
 		m_pScene->TransitionToScene(SceneState::LANDING);
-		// ���콺 ĸó / �߻� ��ٿ� / ���� ���� �ʱ�ȭ ? ���� ���ӿ��� �����ϰ� ����.
+		// 마우스 캡처 / 발사 쿨다운 / 점프 상태 초기화 — 새 게임에서 무관하게 시작.
 		if (m_bMouseCaptured) {
 			::ShowCursor(TRUE);
 			m_bMouseCaptured = false;
 		}
 		m_fFireCooldown = 0.0f;
-		m_fVerticalVelocity = 0.0f;
-		m_bGrounded = true;
+		if (m_pPlayer) {
+			m_pPlayer->SetVerticalVelocity(0.0f);
+			m_pPlayer->SetGrounded(true);
+		}
 		// ī�޶� ���� ȭ�� �������� �ǵ�����.
 		if (m_pCamera) {
 			m_pCamera->GenerateViewMatrix(
@@ -1242,37 +1264,39 @@ void CGameFramework::SetupGameCamera(SceneState state)
 	default: return; // LANDING ?? ?????? ???? ???????.
 	}
 	m_pCamera->GenerateViewMatrix(info.cameraPosition, info.cameraLookAt, XMFLOAT3(0.0f, 1.0f, 0.0f));
-	// ???? ??? ?��???? ????? ???? ???? ????? ????.
-	m_xmf3PlayerPos = info.cameraPosition;
-	// ?????? ?? ?? ???? ?? ??? FPS ?? ????.
+	// 시작 시 플레이어 위치를 카메라 위치(맵의 스타팅 포지션) 와 동일하게 한다.
+	if (m_pPlayer) m_pPlayer->SetPosition(info.cameraPosition);
+	// 게임이 시작될 때 기본 모드는 FPS 로 한다.
 	m_pCamera->SetMode(ECameraMode::FPS);
 	if (m_pScene) m_pScene->SetPlayerVisible(false);
-	// ???? ProcessInput ???? ??? ???�J ��??? ?????? ???.
+	// 다음 ProcessInput 에서 마우스 캡처가 다시 시작되도록 한다.
 	m_bMouseCaptured = false;
-	// ???? ???? ????.
-	m_fVerticalVelocity = 0.0f;
-	m_bGrounded = true;
+	// 점프 상태 초기화.
+	if (m_pPlayer) {
+		m_pPlayer->SetVerticalVelocity(0.0f);
+		m_pPlayer->SetGrounded(true);
+	}
 	// Bullets fired on the previous map should not carry over; the cooldown
 	// is per-life, so reset it too.
 	m_fFireCooldown = 0.0f;
 
-	// ������ / �� / ���� ��ü ����. ���� ������ ���� ��ü�� �����ϰ� �� ���� �����Ѵ�.
-	// LANDING �� MAP_SELECT �� MAP1/2 �� ������ ��� ��ο��� ȣ��ǹǷ�,
-	// �װ� �ٽ� �����ϴ� �帧�� ù ���� ���� �帧�� �����ϰ� �����Ѵ�.
-	m_nPlayerLife = 10;
+	// 라이프 / 적 / 승리 등의 상태 초기화. 같은 맵으로 다시 진입하는 경로에서도
+	// 새 게임 시작과 같은 흐름이 되도록 보장한다.
+	if (m_pPlayer) m_pPlayer->SetHP(10);
 	m_bResetPending = false;
 	// 승리 타이머 초기화 — 새 게임 시작 시 카운트다운/메시지 잔여 상태 정리.
 	m_fVictoryTimer = -1.0f;
 	if (m_pScene) m_pScene->ResetGameplayState();
 	SpawnEnemiesForMap(state);
 
-	// �÷��̾� ���� ��ġ�� �� ���� ��ġ�� ��� ����ȭ�Ͽ�, ù ������ �浹 ������
-	// ���� ��ġ�� �������� �ʰ� �Ѵ� (Scene::AnimateObjects �� EnemyBullet �� Player).
-	if (m_pPlayerModel) {
+	// 플레이어 모델 위치를 시작 위치에 즉시 동기화하여, 첫 프레임 충돌 판정이
+	// 이전 위치를 사용하지 않게 한다 (Scene::AnimateObjects 의 EnemyBullet vs Player).
+	if (m_pPlayerModel && m_pPlayer) {
+		const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 		const XMFLOAT3 modelCenter{
-			m_xmf3PlayerPos.x,
-			m_xmf3PlayerPos.y - MAP_EYE_HEIGHT + 1.3f,
-			m_xmf3PlayerPos.z };
+			playerPos.x,
+			playerPos.y - MAP_EYE_HEIGHT + 1.3f,
+			playerPos.z };
 		m_pPlayerModel->SetWorldYawAndPosition(m_pCamera->GetYaw(), modelCenter);
 	}
 }
@@ -1285,14 +1309,16 @@ void CGameFramework::SetupMapSelectCamera()
 		XMFLOAT3(0.0f, 5.0f, -55.0f),
 		XMFLOAT3(0.0f, 0.0f, 0.0f),
 		XMFLOAT3(0.0f, 1.0f, 0.0f));
-	// ???�J ��??? ??????? ��???? ????? ???.
+	// 마우스 캡처가 켜져 있으면 풀어준다 (메뉴 화면 처리).
 	if (m_bMouseCaptured) {
 		::ShowCursor(TRUE);
 		m_bMouseCaptured = false;
 	}
-	// ???? ???? ????.
-	m_fVerticalVelocity = 0.0f;
-	m_bGrounded = true;
+	// 점프 상태 초기화.
+	if (m_pPlayer) {
+		m_pPlayer->SetVerticalVelocity(0.0f);
+		m_pPlayer->SetGrounded(true);
+	}
 }
 
 void CGameFramework::WaitForGPUComplete()
@@ -1384,10 +1410,10 @@ void CGameFramework::FrameAdvance()
 	// CObjectsShader 의 PSO 가 그대로 바인딩되어 있어 별도 PSO 전환 없이 동일 파이프
 	// 라인으로 그릴 수 있다. 소총 GameObject 는 shader 미할당이지만 m_xmf4x4World 만
 	// 바인딩되면 충분하다.
-	if (m_pRifle && m_pScene && m_pCamera) {
+	if (m_pPlayer && m_pPlayer->GetRifle() && m_pScene && m_pCamera) {
 		const SceneState st = m_pScene->GetCurrentState();
 		if (st == SceneState::MAP1 || st == SceneState::MAP2) {
-			m_pRifle->Render(m_pd3dCommandList.Get(), m_pCamera.get());
+			m_pPlayer->GetRifle()->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 		}
 	}
 
@@ -1399,9 +1425,10 @@ void CGameFramework::FrameAdvance()
 		if (st == SceneState::MAP1 || st == SceneState::MAP2) {
 			m_pCrosshair->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 
-			// ������ ��: ȭ�� �߾� �ϴ�. m_nPlayerLife ������ŭ �տ������� �����Ѵ�.
-			// ���� ĭ�� �׸��� �ʴ� �ܼ� ���. CHudShader �� �����ϹǷ� PSO ��ȯ ��� ����.
-			const int nDraw = (m_nPlayerLife < 0) ? 0 : (m_nPlayerLife > 10 ? 10 : m_nPlayerLife);
+			// 라이프 바: 화면 중앙 하단. m_pPlayer->GetHP() 개수만큼 앞에서부터 렌더한다.
+			// 비어 있는 칸은 그리지 않는 단순 방식. CHudShader 가 공유되므로 PSO 전환 비용 없음.
+			const int nLife = m_pPlayer ? m_pPlayer->GetHP() : 0;
+			const int nDraw = (nLife < 0) ? 0 : (nLife > 10 ? 10 : nLife);
 			for (int i = 0; i < nDraw && i < static_cast<int>(m_pLifeBarSegments.size()); ++i) {
 				if (m_pLifeBarSegments[i]) {
 					m_pLifeBarSegments[i]->Render(m_pd3dCommandList.Get(), m_pCamera.get());

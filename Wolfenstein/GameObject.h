@@ -144,6 +144,65 @@ private:
 };
 
 // ==========================================================================
+// CCharacter
+// ==========================================================================
+// 플레이어/적이 공유하는 캐릭터 기반 클래스. CGameObject 가 제공하는 위치/
+// 월드 행렬 위에 체력, 점프 물리, 소총 부착, XZ 분리 충돌 이동을 더한다.
+//
+// 서브클래스(CPlayer / CEnemyObject) 가 차별화하는 부분:
+//   - 입력 주체 (키보드/마우스 vs AI 상태머신)
+//   - 시각 모델 (메시/색상)
+//   - 소총의 부착 위치/방향 (어깨 너머 카메라 vs 적 가슴 높이)
+class CCharacter : public CGameObject
+{
+public:
+	CCharacter();
+	virtual ~CCharacter();
+
+	// 체력 관련
+	int  GetHP() const { return m_nHP; }
+	void SetHP(int nHP) { m_nHP = nHP; }
+	void TakeDamage(int n);
+
+	// 점프 물리 상태
+	bool IsJumping() const { return m_bJumping; }
+	void StartJump(float fInitialVelocity);
+
+	// 소총 부착/접근. 서브클래스에서 소총 메시를 주입할 때 호출.
+	void SetRifleMesh(std::shared_ptr<CMesh> pMesh);
+	CGameObject* GetRifle() const { return m_pRifle.get(); }
+
+	// 현재 씬 상태(MAP1/MAP2) 캐시. TryMoveXZ 가 충돌 판정에 사용.
+	void SetSceneState(SceneState eState) { m_eSceneState = eState; }
+	SceneState GetSceneState() const { return m_eSceneState; }
+
+	// 피격 콜백 — 기본 구현은 체력 1 감산 후 0 이하면 Kill().
+	// 서브클래스는 OnHit 을 오버라이드해 추가 연출(반동 등) 을 더할 수 있다.
+	virtual void OnHit(CGameObject* pOther) override;
+
+protected:
+	// XZ 분리 프로브 이동 — 평면 dx/dz 각각에 대해 IsBlockedInMap 으로 충돌 확인.
+	// 단차에 막혔고 점프 가능 상태면 자동으로 점프 시작.
+	void TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep, float fRadius = 0.7f);
+
+	// 점프 중일 때 매 프레임 호출 — 중력을 적용하고 바닥에 닿으면 상태 복귀.
+	void ApplyJumpPhysics(float fTimeElapsed, float fGravity = 20.0f);
+
+	// 점프 쿨다운 타이머 진행 (양수일 때만 감산).
+	void TickJumpCooldown(float fTimeElapsed);
+
+protected:
+	int  m_nHP = 1;
+	bool m_bJumping = false;
+	float m_fVerticalVelocity = 0.0f;
+	float m_fJumpCooldown = 0.0f;
+
+	std::shared_ptr<CGameObject> m_pRifle;
+
+	SceneState m_eSceneState{};
+};
+
+// ==========================================================================
 // CEnemyObject
 // ==========================================================================
 // 적 AI 객체. 평소엔 패트롤(이동 1~2초 / 정지 2~3초 인스턴스 랜덤)을 반복하고,
@@ -159,7 +218,7 @@ enum class EEnemyAIState {
 	Pursue,          // 플레이어 추적 중 (m_bAware==true 일 때만)
 };
 
-class CEnemyObject : public CGameObject
+class CEnemyObject : public CCharacter
 {
 public:
 	CEnemyObject(SceneState eSceneState, unsigned int nSeed);
@@ -183,11 +242,7 @@ public:
 	// Scene::Render 가 살아있는 적 별로 마커를 추가 렌더할 수 있도록 raw 포인터 노출.
 	CGameObject* GetMarker() const { return m_pMarker.get(); }
 
-	// 적 소총 메시를 주입한다. SpawnEnemiesForMap 에서 호출. 내부에서 m_pRifle 을
-	// 생성하고 Animate 에서 매 프레임 오른손 위치(플레이어 방향 우측 + 전방)에 동기화.
-	void SetRifleMesh(std::shared_ptr<CMesh> pMesh);
-	// Scene::Render 가 살아있는 적 별로 소총을 추가 렌더할 수 있도록 raw 포인터 노출.
-	CGameObject* GetRifle() const { return m_pRifle.get(); }
+	// 소총 메시 주입 / 접근은 CCharacter 가 제공한다 (SetRifleMesh, GetRifle).
 
 private:
 	EEnemyAIState m_eAIState;
@@ -195,9 +250,7 @@ private:
 	XMFLOAT3      m_xmf3IdleDir;     // Idle_Move 진입 시 4방향 중 하나
 	float         m_fFireCooldown;   // 다음 발사까지 남은 시간(초, 인스턴스 랜덤 2~3초)
 	float         m_fAimFreeze;      // 발사 직후 정지 타이머(초, ~0.3초)
-	int           m_nHP;             // 잔여 체력 (시작 2)
 	bool          m_bAware;          // 한 번 본 후 영구 true
-	SceneState    m_eSceneState;
 	std::mt19937  m_rng;             // 인스턴스 전용 RNG
 
 	std::function<void(const XMFLOAT3&, const XMFLOAT3&)> m_fnFire;
@@ -209,13 +262,6 @@ private:
 	XMFLOAT3 PickRandomFreeDirection();
 	// 헬퍼: 4방향 중 막히지 않으면서 towardsDir 과 내적이 최대인 방향. 없으면 zero.
 	XMFLOAT3 BestFreeDirectionToward(const XMFLOAT3& towardsDir);
-	// 헬퍼: dir 방향으로 fStep 만큼 이동을 시도한다. X/Z 축 분리 프로브.
-	void TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep);
-
-	// 점프 물리
-	bool  m_bJumping          = false;
-	float m_fVerticalVelocity = 0.0f;
-	float m_fJumpCooldown     = 0.0f;
 
 	// A* 경로 캐시 — 추적 중 갱신 간격마다 재계산.
 	std::vector<XMFLOAT3> m_vPath;           // 경유 셀 월드 좌표 목록
@@ -227,8 +273,4 @@ private:
 	// 적 머리 위로 동기화한다. 가시성은 m_bMarkerVisible 에 따라 Scene::Render 가 결정.
 	std::shared_ptr<CGameObject> m_pMarker;
 	bool                         m_bMarkerVisible = false;
-
-	// 오른손 소총. SetRifleMesh 호출 시 생성되며, Animate 가 매 프레임 위치/회전을
-	// 플레이어를 바라보는 오른쪽 위치에 동기화한다. 항상 표시 (적이 보이면 총도 보임).
-	std::shared_ptr<CGameObject> m_pRifle;
 };

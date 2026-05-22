@@ -267,6 +267,124 @@ void CBulletObject::Animate(float fTimeElapsed)
 }
 
 // ==========================================================================
+// CCharacter
+// ==========================================================================
+CCharacter::CCharacter()
+{
+}
+
+CCharacter::~CCharacter()
+{
+}
+
+void CCharacter::TakeDamage(int n)
+{
+	m_nHP -= n;
+	if (m_nHP <= 0) {
+		m_nHP = 0;
+		Kill();
+	}
+}
+
+void CCharacter::StartJump(float fInitialVelocity)
+{
+	m_bJumping = true;
+	m_fVerticalVelocity = fInitialVelocity;
+}
+
+void CCharacter::SetRifleMesh(std::shared_ptr<CMesh> pMesh)
+{
+	// 소총은 캐릭터와 별도의 CGameObject — 서브클래스 Animate 에서 매 프레임
+	// 위치/회전을 동기화한다. 메시만 부착하고 트랜스폼은 외부에서 세팅.
+	m_pRifle = std::make_shared<CGameObject>();
+	m_pRifle->SetMesh(std::move(pMesh));
+}
+
+void CCharacter::OnHit(CGameObject* /*pOther*/)
+{
+	// 기본 피격 처리: 체력 1 감산. 서브클래스가 추가 연출(반동/사망 음향) 을
+	// 입히려면 오버라이드.
+	TakeDamage(1);
+}
+
+void CCharacter::TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep, float fRadius)
+{
+	// X/Z 축 분리 프로브 이동 — 한 축이 벽에 막혀도 다른 축은 통과시켜 벽에
+	// 비스듬히 다가갈 때 미끄러지듯 이동한다. 단차에 막히면 자동 점프 시작.
+	XMFLOAT3 pos = GetPosition();
+	const float kFeetY = pos.y - m_xmf3AABBHalf.y;
+	const float kGravity = 20.0f;
+
+	const float dx = xmf3Dir.x * fStep;
+	const float dz = xmf3Dir.z * fStep;
+	bool bBlockedByStep = false;
+
+	if (dx != 0.0f) {
+		const float probeX = pos.x + dx + (dx > 0.0f ? fRadius : -fRadius);
+		if (!IsBlockedInMap(m_eSceneState, probeX, pos.z, kFeetY)) {
+			pos.x += dx;
+		} else {
+			const float nextFloor = GetFloorHeightAt(m_eSceneState, probeX, pos.z);
+			if (nextFloor > kFeetY + 0.05f) bBlockedByStep = true;
+		}
+	}
+	if (dz != 0.0f) {
+		const float probeZ = pos.z + dz + (dz > 0.0f ? fRadius : -fRadius);
+		if (!IsBlockedInMap(m_eSceneState, pos.x, probeZ, kFeetY)) {
+			pos.z += dz;
+		} else {
+			const float nextFloor = GetFloorHeightAt(m_eSceneState, pos.x, probeZ);
+			if (nextFloor > kFeetY + 0.05f) bBlockedByStep = true;
+		}
+	}
+
+	if (bBlockedByStep && !m_bJumping && m_fJumpCooldown <= 0.0f) {
+		float stepHeight = 0.0f;
+		if (dx != 0.0f) {
+			const float px = pos.x + dx + (dx > 0.0f ? fRadius : -fRadius);
+			const float h = GetFloorHeightAt(m_eSceneState, px, pos.z);
+			if (h > stepHeight) stepHeight = h;
+		}
+		if (dz != 0.0f) {
+			const float pz = pos.z + dz + (dz > 0.0f ? fRadius : -fRadius);
+			const float h = GetFloorHeightAt(m_eSceneState, pos.x, pz);
+			if (h > stepHeight) stepHeight = h;
+		}
+		const float jumpHRaw = stepHeight - kFeetY + 0.3f;
+		const float jumpH = (jumpHRaw > 0.5f) ? jumpHRaw : 0.5f;
+		m_fVerticalVelocity = sqrtf(2.0f * kGravity * jumpH);
+		m_bJumping = true;
+		m_fJumpCooldown = 2.0f;
+	}
+
+	if (!m_bJumping) {
+		const float floorY = GetFloorHeightAt(m_eSceneState, pos.x, pos.z);
+		pos.y = floorY + m_xmf3AABBHalf.y;
+	}
+	SetPosition(pos);
+}
+
+void CCharacter::ApplyJumpPhysics(float fTimeElapsed, float fGravity)
+{
+	if (!m_bJumping) return;
+	m_fVerticalVelocity -= fGravity * fTimeElapsed;
+	XMFLOAT3 jpos = GetPosition();
+	jpos.y += m_fVerticalVelocity * fTimeElapsed;
+	const float groundY = GetFloorHeightAt(m_eSceneState, jpos.x, jpos.z) + m_xmf3AABBHalf.y;
+	if (jpos.y <= groundY) {
+		jpos.y = groundY;
+		m_bJumping = false;
+		m_fVerticalVelocity = 0.0f;
+	}
+	SetPosition(jpos);
+}
+
+void CCharacter::TickJumpCooldown(float fTimeElapsed)
+{
+	if (m_fJumpCooldown > 0.0f) m_fJumpCooldown -= fTimeElapsed;
+}
+
+// ==========================================================================
 // CEnemyObject
 // ==========================================================================
 CEnemyObject::CEnemyObject(SceneState eSceneState, unsigned int nSeed)
@@ -275,12 +393,12 @@ CEnemyObject::CEnemyObject(SceneState eSceneState, unsigned int nSeed)
 	, m_xmf3IdleDir{ 0.0f, 0.0f, 0.0f }
 	, m_fFireCooldown(0.0f)
 	, m_fAimFreeze(0.0f)
-	, m_nHP(2)
 	, m_bAware(false)
-	, m_eSceneState(eSceneState)
 	, m_rng(nSeed)
 {
 	m_eTag = EObjectTag::Enemy;
+	m_eSceneState = eSceneState;
+	m_nHP = 2; // 적 기본 체력
 	// AABB 는 플레이어 모델과 동일한 크기로 잡아 충돌이 자연스럽게 처리되게 한다.
 	m_xmf3AABBHalf = XMFLOAT3(0.6f, 1.3f, 0.6f);
 	// 초기엔 잠시 정지하며 시작 (스폰 직후 즉시 추격 시야가 트이는 것을 약간 늦춤).
@@ -352,64 +470,6 @@ XMFLOAT3 CEnemyObject::BestFreeDirectionToward(const XMFLOAT3& towardsDir)
 	return bestDir;
 }
 
-void CEnemyObject::TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep)
-{
-	XMFLOAT3 pos = GetPosition();
-	const float kRadius = 0.7f;
-	const float kFeetY = pos.y - m_xmf3AABBHalf.y;
-	const float kGravity = 20.0f;
-
-	const float dx = xmf3Dir.x * fStep;
-	const float dz = xmf3Dir.z * fStep;
-	bool bBlockedByStep = false;
-
-	if (dx != 0.0f) {
-		const float probeX = pos.x + dx + (dx > 0.0f ? kRadius : -kRadius);
-		if (!IsBlockedInMap(m_eSceneState, probeX, pos.z, kFeetY)) {
-			pos.x += dx;
-		} else {
-			const float nextFloor = GetFloorHeightAt(m_eSceneState, probeX, pos.z);
-			if (nextFloor > kFeetY + 0.05f) bBlockedByStep = true;
-		}
-	}
-	if (dz != 0.0f) {
-		const float probeZ = pos.z + dz + (dz > 0.0f ? kRadius : -kRadius);
-		if (!IsBlockedInMap(m_eSceneState, pos.x, probeZ, kFeetY)) {
-			pos.z += dz;
-		} else {
-			const float nextFloor = GetFloorHeightAt(m_eSceneState, pos.x, probeZ);
-			if (nextFloor > kFeetY + 0.05f) bBlockedByStep = true;
-		}
-	}
-
-	// 단차에 막혔고 아직 점프 중이 아닐 때만 점프 시작.
-	if (bBlockedByStep && !m_bJumping && m_fJumpCooldown <= 0.0f) {
-		float stepHeight = 0.0f;
-		if (dx != 0.0f) {
-			const float px = pos.x + dx + (dx > 0.0f ? kRadius : -kRadius);
-			const float h = GetFloorHeightAt(m_eSceneState, px, pos.z);
-			if (h > stepHeight) stepHeight = h;
-		}
-		if (dz != 0.0f) {
-			const float pz = pos.z + dz + (dz > 0.0f ? kRadius : -kRadius);
-			const float h = GetFloorHeightAt(m_eSceneState, pos.x, pz);
-			if (h > stepHeight) stepHeight = h;
-		}
-		const float jumpHRaw = stepHeight - kFeetY + 0.3f;
-		const float jumpH = (jumpHRaw > 0.5f) ? jumpHRaw : 0.5f;
-		m_fVerticalVelocity = sqrtf(2.0f * kGravity * jumpH);
-		m_bJumping = true;
-		m_fJumpCooldown = 2.0f;
-	}
-
-	// 점프 중이 아닐 때만 Y 를 바닥에 스냅.
-	if (!m_bJumping) {
-		const float floorY = GetFloorHeightAt(m_eSceneState, pos.x, pos.z);
-		pos.y = floorY + m_xmf3AABBHalf.y;
-	}
-	SetPosition(pos);
-}
-
 void CEnemyObject::Animate(float fTimeElapsed)
 {
 	if (!m_bAlive) return;
@@ -419,22 +479,10 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	if (m_fStateTimer > 0.0f) m_fStateTimer -= fTimeElapsed;
 	if (m_fFireCooldown > 0.0f) m_fFireCooldown -= fTimeElapsed;
 	if (m_fAimFreeze > 0.0f) m_fAimFreeze -= fTimeElapsed;
-	if (m_fJumpCooldown > 0.0f) m_fJumpCooldown -= fTimeElapsed;
+	TickJumpCooldown(fTimeElapsed);
 
-	// 1b. 점프 물리 (상태머신과 독립적으로 매 프레임 처리)
-	if (m_bJumping) {
-		const float kGravity = 20.0f;
-		m_fVerticalVelocity -= kGravity * fTimeElapsed;
-		XMFLOAT3 jpos = GetPosition();
-		jpos.y += m_fVerticalVelocity * fTimeElapsed;
-		const float groundY = GetFloorHeightAt(m_eSceneState, jpos.x, jpos.z) + m_xmf3AABBHalf.y;
-		if (jpos.y <= groundY) {
-			jpos.y = groundY;
-			m_bJumping = false;
-			m_fVerticalVelocity = 0.0f;
-		}
-		SetPosition(jpos);
-	}
+	// 1b. 점프 물리는 CCharacter 가 통합 처리 (점프 중일 때만 동작).
+	ApplyJumpPhysics(fTimeElapsed);
 
 	// 2. 시야 판정 — 한 번 본 적은 영구 추적 (사용자 결정: 영구 추적)
 	const XMFLOAT3 myPos = GetPosition();
@@ -607,14 +655,12 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	}
 }
 
-void CEnemyObject::OnHit(CGameObject* /*pOther*/)
+void CEnemyObject::OnHit(CGameObject* pOther)
 {
 	// Scene::AnimateObjects 의 충돌 콜백이 b->OnHit(a) 형태로 호출한다.
 	// 플레이어 총알(a) 은 콜백 안에서 이미 Kill() 되므로 여기서는 체력만 감산.
-	--m_nHP;
-	if (m_nHP <= 0) {
-		Kill();
-	}
+	// CCharacter::OnHit 가 TakeDamage(1) 로 체력 감산 + Kill 처리한다.
+	CCharacter::OnHit(pOther);
 }
 
 void CEnemyObject::SetMarkerMesh(std::shared_ptr<CMesh> pMesh)
@@ -623,12 +669,4 @@ void CEnemyObject::SetMarkerMesh(std::shared_ptr<CMesh> pMesh)
 	// 가시성은 m_bMarkerVisible 플래그로 토글되며 Scene::Render 가 분기 처리.
 	m_pMarker = std::make_shared<CGameObject>();
 	m_pMarker->SetMesh(std::move(pMesh));
-}
-
-void CEnemyObject::SetRifleMesh(std::shared_ptr<CMesh> pMesh)
-{
-	// 적 소총은 마커와 동일 패턴: 적과 별도의 CGameObject. Animate 에서 위치/회전을
-	// 매 프레임 오른손 위치(플레이어 방향 우측 + 전방) 에 동기화한다. 항상 표시.
-	m_pRifle = std::make_shared<CGameObject>();
-	m_pRifle->SetMesh(std::move(pMesh));
 }
