@@ -315,7 +315,10 @@ void CGameFramework::BuildObjects()
 	m_pCamera = std::make_unique<CCamera>();
 	m_pCamera->SetViewport(0, 0, m_nWndClientWidth, m_nWndClientHeight, 0.0f, 1.0f);
 	m_pCamera->SetScissorRect(0, 0, m_nWndClientWidth, m_nWndClientHeight);
-	m_pCamera->GenerateProjectionMatrix(1.0f, FRUSTUM_FAR_PLANE,
+	// [Claude] 근평면을 1.0 → 0.1 로 축소. 기존엔 카메라에 인접한 면(특히 소총 개머리판,
+	// 벽 측면 접촉)이 근평면에 잘려 투명해지는 문제가 있었다. 0.1 로 줄여도 far=500 과의
+	// ratio 가 5000:1 로 24-bit depth buffer 정밀도에 무리가 없다.
+	m_pCamera->GenerateProjectionMatrix(0.1f, FRUSTUM_FAR_PLANE,
 		float(m_nWndClientWidth) / float(m_nWndClientHeight), 90.0f);
 	m_pCamera->GenerateViewMatrix(XMFLOAT3(0.0f, 0.0f, -50.0f), XMFLOAT3(0.0f, 0.0f, 0.0f),
 		XMFLOAT3(0.0f, 1.0f, 0.0f));
@@ -353,17 +356,21 @@ void CGameFramework::BuildObjects()
 		1.2f, 2.6f, 1.2f, true, XMFLOAT4(0.45f, 0.15f, 0.55f, 1.0f));
 
 	// 소총 메시: 가늘고 긴 직육면체 (어두운 회색). 깊이가 길이 축이며 +Z 방향이 총구.
-	// 깊이는 1.2 로 잡아 FPS 모드에서 카메라 근평면(=1.0) 클리핑을 피할 수 있도록 한다.
+	// [Claude] 근평면을 0.1 로 축소했으므로 소총 깊이(1.2)/위치(1.7f forward)는
+	// 그대로 두어도 개머리판이 잘리지 않는다. 1.7 - 0.6 = 1.1 >> 0.1.
 	m_pRifleMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		0.18f, 0.18f, 1.2f, true, XMFLOAT4(0.25f, 0.25f, 0.28f, 1.0f));
 	m_pRifle = std::make_shared<CGameObject>();
 	m_pRifle->SetMesh(m_pRifleMesh);
 
-	// 적 마커 기둥 메시: 가늘고 매우 긴 노란 기둥. 잔여 적 ≤3 일 때 적 머리 위에 표시.
+	// 적 마커 기둥 메시: 가늘고 매우 긴 노란 기둥. 잔여 적 ≤5 일 때 적 머리 위에 표시.
+	// [Claude] 높이 4.0 → 14.0 으로 3.5 배 증가. 벽 기본 높이가 8.0 이므로
+	// 14.0 기둥은 마커 중심이 머리 위 7.0 에 위치하면 윗부분이 벽 위 5.0 정도까지
+	// 솟아 하늘을 봐도 위치 파악이 가능하다.
 	m_pEnemyMarkerMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
-		0.15f, 4.0f, 0.15f, true, XMFLOAT4(1.0f, 0.85f, 0.1f, 1.0f));
+		0.15f, 14.0f, 0.15f, true, XMFLOAT4(1.0f, 0.85f, 0.1f, 1.0f));
 
 	// HUD ���̴� (���ڼ� + ������ �� ����). ���� OFF, �ø� OFF.
 	// CreateShader �� ���� �Լ��̹Ƿ� base �����ͷ� ȣ���ص� CHudShader::CreateShader �� ����ġ�ȴ�.
@@ -708,6 +715,12 @@ void CGameFramework::ProcessInput()
 	// Tick the shoot cooldown so the next click can fire when this hits 0.
 	if (m_fFireCooldown > 0.0f) m_fFireCooldown -= m_GameTimer.GetTimeElapsed();
 
+	// [Claude] 반동 애니메이션 타이머 진행. kRecoilDuration 초과 시 비활성화(-1).
+	if (m_fRecoilTimer >= 0.0f) {
+		m_fRecoilTimer += m_GameTimer.GetTimeElapsed();
+		if (m_fRecoilTimer >= kRecoilDuration) m_fRecoilTimer = -1.0f;
+	}
+
 	const bool bForeground = (::GetForegroundWindow() == m_hWnd);
 
 	// =============== ???�J ?? ===============
@@ -854,8 +867,12 @@ void CGameFramework::ProcessInput()
 		const XMFLOAT3 backDir{ -sinf(yaw), 0.0f, -cosf(yaw) };
 
 		// 구면 궤도 분해 — 수평 성분(반지름 * cos pitch), 수직 성분(반지름 * sin pitch).
+		// [Claude] vertBack 부호 반전. 이전엔 마우스를 위로 올리면(pitch +) 카메라가
+		// 플레이어보다 위로 올라가 SetPositionAndTarget 으로 플레이어를 내려다보게
+		// 되어, 화면이 아래로 향하는 반전 현상이 발생했다. -sin(pitch) 로 카메라를
+		// 플레이어 아래에 두면 카메라가 위를 바라보게 되어 FPS 와 동일하게 작동한다.
 		const float horizBack = kBack * cosf(pitch);
-		const float vertBack  = kBack * sinf(pitch);
+		const float vertBack  = -kBack * sinf(pitch);
 		const float eyeY      = m_xmf3PlayerPos.y + vertBack + kUp;
 
 		// 카메라-플레이어 사이 벽이 있으면 수평 거리를 클램프해 카메라 관통을 막는다.
@@ -897,30 +914,60 @@ void CGameFramework::UpdateRifleTransform()
 	const float cp = cosf(pitch);
 	const XMFLOAT3 aim{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
 
+	// [Claude] 반동 키프레임 보간. m_fRecoilTimer 가 음수면 0, 아니면 3 키프레임
+	// 사이에서 선형 보간하여 forward 방향 오프셋(뒤로 후진할 때 음수) 계산.
+	// 키프레임:
+	//   (0.00 s, 0.00)   — 시작
+	//   (0.06 s, -0.30)  — 최대 후진
+	//   (0.14 s, -0.10)  — 절반 복귀
+	//   (0.25 s, 0.00)   — 원위치
+	auto computeRecoilOffset = [this]() -> float {
+		if (m_fRecoilTimer < 0.0f) return 0.0f;
+		const float t = m_fRecoilTimer;
+		const float k0t = 0.00f, k0v = 0.00f;
+		const float k1t = 0.06f, k1v = -0.30f;
+		const float k2t = 0.14f, k2v = -0.10f;
+		const float k3t = 0.25f, k3v = 0.00f;
+		if (t <= k1t) {
+			const float a = (t - k0t) / (k1t - k0t);
+			return k0v + (k1v - k0v) * a;
+		} else if (t <= k2t) {
+			const float a = (t - k1t) / (k2t - k1t);
+			return k1v + (k2v - k1v) * a;
+		} else if (t <= k3t) {
+			const float a = (t - k2t) / (k3t - k2t);
+			return k2v + (k3v - k2v) * a;
+		}
+		return 0.0f;
+	};
+	const float fRecoilOffset = computeRecoilOffset();
+
 	XMFLOAT3 pos;
 	XMFLOAT3 fwd;
 
 	if (m_pCamera->GetMode() == ECameraMode::FPS) {
 		// FPS: 카메라 기준 우측 하단(어깨총처럼 화면 한쪽에 보이도록).
-		// 근평면(=1.0) 클리핑 방지를 위해 소총 중심을 카메라 1.7 단위 전방에 둔다
-		// (소총 깊이 1.2 / 2 = 0.6, 1.7 - 0.6 = 1.1 > 1.0 근평면).
+		// [Claude] 근평면이 0.1 로 줄어들어 1.7 forward 면 충분히 안전 (1.1 >> 0.1).
 		const XMFLOAT3 camPos   = m_pCamera->GetPosition();
 		const XMFLOAT3 camRight = m_pCamera->GetRight();
 		const float kForward = 1.7f;
 		const float kSide    = 0.45f;
 		const float kDown    = 0.35f;
-		pos.x = camPos.x + camRight.x * kSide + aim.x * kForward;
-		pos.y = camPos.y - kDown              + aim.y * kForward;
-		pos.z = camPos.z + camRight.z * kSide + aim.z * kForward;
+		// [Claude] 반동 오프셋은 aim 방향(=forward) 으로 더해 발사 후 소총을 뒤로 후진시킴.
+		pos.x = camPos.x + camRight.x * kSide + aim.x * (kForward + fRecoilOffset);
+		pos.y = camPos.y - kDown              + aim.y * (kForward + fRecoilOffset);
+		pos.z = camPos.z + camRight.z * kSide + aim.z * (kForward + fRecoilOffset);
 		fwd = aim;
 	}
 	else {
 		// TPS: 플레이어 모델 오른쪽 어깨 옆. 메시 중심 높이는 modelCenter 와 동일.
 		const XMFLOAT3 playerYawRight{ cosf(yaw), 0.0f, -sinf(yaw) };
 		const float modelCenterY = m_xmf3PlayerPos.y - MAP_EYE_HEIGHT + 1.3f;
-		pos.x = m_xmf3PlayerPos.x + playerYawRight.x * 0.85f + sinf(yaw) * 0.4f;
+		// [Claude] TPS 에서도 반동 오프셋을 yaw 방향(=어깨 정면) 으로 더한다.
+		const float kBaseForward = 0.4f;
+		pos.x = m_xmf3PlayerPos.x + playerYawRight.x * 0.85f + sinf(yaw) * (kBaseForward + fRecoilOffset);
 		pos.y = modelCenterY;
-		pos.z = m_xmf3PlayerPos.z + playerYawRight.z * 0.85f + cosf(yaw) * 0.4f;
+		pos.z = m_xmf3PlayerPos.z + playerYawRight.z * 0.85f + cosf(yaw) * (kBaseForward + fRecoilOffset);
 		fwd = aim;
 	}
 
@@ -968,6 +1015,10 @@ void CGameFramework::FireBullet()
 	m_pScene->AddObjectToCurrentMap(pBullet);
 
 	m_fFireCooldown = 0.18f;
+
+	// [Claude] 반동 애니메이션 시작. UpdateRifleTransform 이 m_fRecoilTimer 값으로
+	// 소총 위치에 forward-방향 오프셋(뒤로)을 적용한다. 발사 동작/방향에는 영향 없음.
+	m_fRecoilTimer = 0.0f;
 }
 
 void CGameFramework::SpawnEnemyBullet(const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir)
@@ -1027,8 +1078,8 @@ void CGameFramework::AnimateObjects()
 		if (curState == SceneState::MAP1 || curState == SceneState::MAP2) {
 			const int nAlive = m_pScene->CountAliveEnemies();
 
-			// 마커: 잔여 1~3 마리일 때만 표시. 0 이거나 4+ 면 숨김.
-			m_pScene->SetEnemyMarkersVisible(nAlive > 0 && nAlive <= 3);
+			// [Claude] 마커: 잔여 1~5 마리일 때 표시. 0 이거나 6+ 면 숨김 (이전 3→5 로 완화).
+			m_pScene->SetEnemyMarkersVisible(nAlive > 0 && nAlive <= 5);
 
 			// 승리 타이머: 적 0 마리이고 아직 카운트다운 중이 아니면 시작.
 			if (nAlive == 0 && m_fVictoryTimer < 0.0f) {

@@ -213,6 +213,119 @@ CCubeMeshDiffused::~CCubeMeshDiffused()
 
 
 // ====================================================================================
+// [Claude] CMergedCubeMesh — 다수 직육면체를 단일 메시로 통합
+// ====================================================================================
+// 각 큐브의 8개 정점을 미리 월드 좌표로 변환해 단일 정점/인덱스/노멀 버퍼로 합친다.
+// N 개의 큐브 = 8N 정점 + 36N 인덱스 + 8N 노멀, 단 1 회의 DrawIndexedInstanced 로 렌더.
+// 노멀은 큐브 중심에서 정점 위치로 향하는 단위 벡터 (각 정점마다 (±1,±1,±1)/sqrt(3)).
+CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+	const std::vector<Cube>& cubes)
+	: CMesh(pd3dDevice, pd3dCommandList)
+{
+	m_nStride = sizeof(CDiffusedVertex);
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	const size_t nCubes = cubes.size();
+	m_nVertices = static_cast<UINT>(nCubes * 8);
+	m_nIndices  = static_cast<UINT>(nCubes * 36);
+
+	if (nCubes == 0) {
+		// 빈 메시여도 Render 호출 시 안전하도록 dummy 버퍼라도 만들어두지는 않는다 —
+		// CMesh::Render 가 m_pd3dVertexBuffer 가 없으면 IASetVertexBuffers 에서 크래시.
+		// 호출부에서 nCubes > 0 인 경우에만 인스턴스화해야 한다.
+		return;
+	}
+
+	// 큐브 인덱스 패턴 (CCubeMeshDiffused 와 동일). 정점 8 개 단위 오프셋만 더하면 된다.
+	const UINT kBaseIndices[36] = {
+		3, 1, 0,   2, 1, 3,   // 앞면(Front)
+		0, 5, 4,   1, 5, 0,   // 윗면(Top)
+		3, 4, 7,   0, 4, 3,   // 뒷면(Back)
+		1, 6, 5,   2, 6, 1,   // 아래면(Bottom)
+		2, 7, 6,   3, 7, 2,   // 옆면(Left)
+		6, 4, 5,   7, 4, 6    // 옆면(Right)
+	};
+
+	// 노멀: 큐브 중심 → 정점 방향 단위 벡터. CCubeMeshDiffused 와 동일.
+	const float kInvSqrt3 = 1.0f / sqrtf(3.0f);
+	const XMFLOAT3 kBaseNormals[8] = {
+		{ -kInvSqrt3, +kInvSqrt3, -kInvSqrt3 },
+		{ +kInvSqrt3, +kInvSqrt3, -kInvSqrt3 },
+		{ +kInvSqrt3, +kInvSqrt3, +kInvSqrt3 },
+		{ -kInvSqrt3, +kInvSqrt3, +kInvSqrt3 },
+		{ -kInvSqrt3, -kInvSqrt3, -kInvSqrt3 },
+		{ +kInvSqrt3, -kInvSqrt3, -kInvSqrt3 },
+		{ +kInvSqrt3, -kInvSqrt3, +kInvSqrt3 },
+		{ -kInvSqrt3, -kInvSqrt3, +kInvSqrt3 },
+	};
+
+	std::vector<CDiffusedVertex> vertices;
+	std::vector<CNormalVertex>   normals;
+	std::vector<UINT>            indices;
+	vertices.reserve(m_nVertices);
+	normals.reserve(m_nVertices);
+	indices.reserve(m_nIndices);
+
+	for (size_t i = 0; i < nCubes; ++i) {
+		const Cube& c = cubes[i];
+		const float fx = c.size.x * 0.5f;
+		const float fy = c.size.y * 0.5f;
+		const float fz = c.size.z * 0.5f;
+		const float cx = c.center.x;
+		const float cy = c.center.y;
+		const float cz = c.center.z;
+
+		// 8 개 정점을 월드 좌표로 직접 저장. world 행렬은 호출부에서 identity 사용.
+		vertices.emplace_back(XMFLOAT3(cx - fx, cy + fy, cz - fz), c.color);
+		vertices.emplace_back(XMFLOAT3(cx + fx, cy + fy, cz - fz), c.color);
+		vertices.emplace_back(XMFLOAT3(cx + fx, cy + fy, cz + fz), c.color);
+		vertices.emplace_back(XMFLOAT3(cx - fx, cy + fy, cz + fz), c.color);
+		vertices.emplace_back(XMFLOAT3(cx - fx, cy - fy, cz - fz), c.color);
+		vertices.emplace_back(XMFLOAT3(cx + fx, cy - fy, cz - fz), c.color);
+		vertices.emplace_back(XMFLOAT3(cx + fx, cy - fy, cz + fz), c.color);
+		vertices.emplace_back(XMFLOAT3(cx - fx, cy - fy, cz + fz), c.color);
+
+		for (int j = 0; j < 8; ++j) normals.emplace_back(kBaseNormals[j]);
+
+		const UINT base = static_cast<UINT>(i * 8);
+		for (int j = 0; j < 36; ++j) indices.push_back(kBaseIndices[j] + base);
+	}
+
+	// ===== 정점 버퍼 (slot 0) =====
+	m_pd3dVertexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		vertices.data(), m_nStride * m_nVertices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dVertexUploadBuffer);
+	m_d3dVertexBufferView.BufferLocation = m_pd3dVertexBuffer->GetGPUVirtualAddress();
+	m_d3dVertexBufferView.StrideInBytes  = m_nStride;
+	m_d3dVertexBufferView.SizeInBytes    = m_nStride * m_nVertices;
+
+	// ===== 인덱스 버퍼 =====
+	m_pd3dIndexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		indices.data(), sizeof(UINT) * m_nIndices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER,
+		&m_pd3dIndexUploadBuffer);
+	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+	m_d3dIndexBufferView.Format         = DXGI_FORMAT_R32_UINT;
+	m_d3dIndexBufferView.SizeInBytes    = sizeof(UINT) * m_nIndices;
+
+	// ===== 노멀 버퍼 (slot 1) =====
+	const UINT normalStride = sizeof(CNormalVertex);
+	m_pd3dNormalBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		normals.data(), normalStride * m_nVertices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dNormalUploadBuffer);
+	m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+	m_d3dNormalBufferView.StrideInBytes  = normalStride;
+	m_d3dNormalBufferView.SizeInBytes    = normalStride * m_nVertices;
+	m_bHasNormals = true;
+}
+
+
+// ====================================================================================
 // CCrosshairMesh : 화면 정중앙 고정 십자선(+) 조준점
 // ====================================================================================
 CCrosshairMesh::CCrosshairMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,

@@ -558,7 +558,10 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	// 으로 최신 좌표를 읽은 뒤 마커 중심을 머리보다 살짝 위로 끌어올린다)
 	if (m_pMarker) {
 		XMFLOAT3 markerPos = GetPosition();
-		markerPos.y += m_xmf3AABBHalf.y + 2.0f; // 적 머리 위 + 마커 절반 높이
+		// [Claude] 마커 메시 높이가 4.0 → 14.0 으로 증가했으므로 절반(=7.0)을 머리 위로
+		// 올린다. 결과: 마커 바닥이 머리 바로 위, 마커 윗부분이 ~14 m 상공까지 솟아
+		// 벽(높이 8) 위로도 노란 막대가 보인다.
+		markerPos.y += m_xmf3AABBHalf.y + 7.0f;
 		m_pMarker->SetPosition(markerPos);
 	}
 }

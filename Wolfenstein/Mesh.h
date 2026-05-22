@@ -101,6 +101,31 @@ public:
 	virtual ~CCubeMeshDiffused();
 };
 
+// [Claude] 다수의 직육면체를 단일 정점/인덱스 버퍼로 통합한 정적 메시.
+// 미로 셀(벽/바닥)은 위치/크기/색만 다르고 회전이 없으므로, 각 큐브의 정점을
+// 미리 월드 좌표로 변환해 한 번의 DrawIndexedInstanced 로 그릴 수 있다.
+// 이는 1800+ 개의 개별 드로우 콜을 단 1 개로 줄여 CPU bound 인 렌더링 부하를
+// 극적으로 감소시킨다 (가장 큰 최적화 효과). 동적 객체(적/총알) 는 그대로 유지.
+//
+// 사용:
+//   std::vector<CMergedCubeMesh::Cube> cubes; cubes.push_back({center, size, color});
+//   auto pMesh = std::make_shared<CMergedCubeMesh>(device, cmdList, cubes);
+//   auto pObj  = std::make_shared<CGameObject>(); pObj->SetMesh(pMesh);
+//   // pObj 의 world 행렬은 identity 로 둔다 (정점이 이미 월드 좌표).
+class CMergedCubeMesh : public CMesh
+{
+public:
+	struct Cube {
+		XMFLOAT3 center;   // 월드 중심 좌표
+		XMFLOAT3 size;     // (width, height, depth) — 전체 크기
+		XMFLOAT4 color;    // 정점 디퓨즈 색상
+	};
+
+	CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+		const std::vector<Cube>& cubes);
+	virtual ~CMergedCubeMesh() = default;
+};
+
 // 화면 정중앙에 회전 없이 고정되는 십자선(+) 조준점 메시.
 // 정점은 NDC(클립 공간) 좌표로 직접 저장되므로 월드/뷰/투영 행렬을 거치지 않는
 // VSHud 셰이더와 함께 사용해야 한다. 두 직사각형(가로 막대 + 세로 막대) 으로
