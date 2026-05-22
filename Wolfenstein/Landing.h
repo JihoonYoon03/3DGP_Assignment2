@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Mesh.h"
 #include "GameObject.h"
@@ -22,7 +22,7 @@ namespace LandingParams {
 	constexpr float TITLE_WAVE_PHASE_OFFSET_PER_LETTER = 0.35f;
 
 	// Button ("GAME START") configuration
-	constexpr XMFLOAT3 BUTTON_ANCHOR_POSITION{ 12.0f, -15.0f, 0.0f };
+	constexpr XMFLOAT3 BUTTON_ANCHOR_POSITION{ 25.0f, 0.0f, 0.0f };
 	constexpr float BUTTON_PIXEL_SIZE = 0.5f;
 	constexpr float BUTTON_LETTER_PITCH_PIXELS = 6.0f;
 	constexpr XMFLOAT4 BUTTON_COLOR{ 0.2f, 1.0f, 0.2f, 1.0f };
@@ -77,7 +77,7 @@ protected:
 	std::vector<std::shared_ptr<CLetterObject>> m_vLetters;
 	XMFLOAT3 m_xmf3BoundingMin{ 0.0f, 0.0f, 0.0f };
 	XMFLOAT3 m_xmf3BoundingMax{ 0.0f, 0.0f, 0.0f };
-	// ���� �޽� �� �ȼ��� ���� ���� ũ��. �ٿ�� �ڽ� ������ ����Ѵ�(unit/pixel).
+	// ???? ??? ?? ????? ???? ???? ???. ???? ??? ?????? ??????(unit/pixel).
 	float m_fPixelSize = 0.0f;
 
 	void UpdateBoundingBox();
