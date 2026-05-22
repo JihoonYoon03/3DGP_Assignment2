@@ -80,6 +80,10 @@ public:
 	// 수를 반환한다. 게임플레이 맵이 아니면 0.
 	int CountAliveEnemies() const;
 
+	// 살아있는 적의 (월드 중심, AABB half) 쌍을 반환한다. 조준 광선이 적 AABB 와
+	// 인터섹션해 LookAt 대상점을 정확히 결정하는 데 사용된다 (CGameFramework::GetAimTargetPoint).
+	std::vector<std::pair<XMFLOAT3, XMFLOAT3>> GetAliveEnemyAABBs() const;
+
 	// 현재 맵의 모든 적 CEnemyObject 에 마커 가시성을 일괄 설정한다.
 	// 적 ≤3 마리일 때 GameFramework 가 true 로 호출해 머리 위 노란 기둥을 표시한다.
 	void SetEnemyMarkersVisible(bool bVisible);

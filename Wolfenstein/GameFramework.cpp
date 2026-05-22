@@ -364,6 +364,11 @@ void CGameFramework::BuildObjects()
 	m_pRifle = std::make_shared<CGameObject>();
 	m_pRifle->SetMesh(m_pRifleMesh);
 
+	// 적 소총 메시: 플레이어 소총과 동일한 형상/색상. 적 인스턴스마다 공유된다.
+	m_pEnemyRifleMesh = std::make_shared<CCubeMeshDiffused>(
+		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+		0.18f, 0.18f, 1.2f, true, XMFLOAT4(0.20f, 0.20f, 0.22f, 1.0f));
+
 	// 적 마커 기둥 메시: 가늘고 매우 긴 노란 기둥. 잔여 적 ≤5 일 때 적 머리 위에 표시.
 	// [Claude] 높이 4.0 → 14.0 으로 3.5 배 증가. 벽 기본 높이가 8.0 이므로
 	// 14.0 기둥은 마커 중심이 머리 위 7.0 에 위치하면 윗부분이 벽 위 5.0 정도까지
@@ -431,7 +436,7 @@ void CGameFramework::BuildObjects()
 			auto pPipMesh = std::make_shared<CHudQuadMesh>(
 				m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 				xL, xR, yT, yB,
-				XMFLOAT4(0.95f, 0.85f, 0.20f, 1.0f));
+				XMFLOAT4(0.65f, 0.25f, 0.80f, 1.0f));
 			auto pPipObj = std::make_shared<CGameObject>();
 			pPipObj->SetMesh(pPipMesh);
 			pPipObj->SetShader(m_pHudShader);
@@ -901,6 +906,75 @@ void CGameFramework::ProcessInput()
 	UpdateRifleTransform();
 }
 
+XMFLOAT3 CGameFramework::GetAimTargetPoint() const
+{
+	// 카메라 위치 + look 방향에서 광선을 쏴 첫 충돌점을 반환.
+	// 벽: ClampDistanceAgainstWalls 재사용 (수평 광선으로 환산 후 3D 거리로 복원).
+	// 적 AABB: 슬랩 알고리즘 (3축 인터섹션 — Real-Time Rendering 표준 공식).
+	// 둘 중 가까운 거리를 채택. 어느 쪽도 맞지 않으면 kMaxAimDist 폴백.
+	constexpr float kMaxAimDist = 200.0f;
+	if (!m_pCamera || !m_pScene) {
+		return XMFLOAT3{ 0.0f, 0.0f, 0.0f };
+	}
+	const XMFLOAT3 origin = m_pCamera->GetPosition();
+	const float yaw = m_pCamera->GetYaw();
+	const float pitch = m_pCamera->GetPitch();
+	const float cp = cosf(pitch);
+	const XMFLOAT3 dir{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
+	const SceneState st = m_pScene->GetCurrentState();
+
+	// (1) 벽까지 거리. ClampDistanceAgainstWalls 는 수평 광선만 다루므로 XZ 길이로
+	// 거리를 환산한 뒤 3D 광선 길이로 복원. 광선이 거의 수직이면(horizLen ≈ 0) 벽
+	// 충돌이 사실상 없으므로 kMaxAimDist 유지.
+	float wallDist = kMaxAimDist;
+	{
+		const float horizLen = sqrtf(dir.x * dir.x + dir.z * dir.z);
+		if (horizLen > 1e-3f) {
+			const XMFLOAT3 dirXZ{ dir.x / horizLen, 0.0f, dir.z / horizLen };
+			const float horizClamped = ClampDistanceAgainstWalls(
+				st, origin, dirXZ, kMaxAimDist * horizLen, origin.y);
+			wallDist = horizClamped / horizLen;
+		}
+	}
+
+	// (2) 적 AABB 까지 거리 — 슬랩 알고리즘.
+	float enemyDist = kMaxAimDist;
+	if (st == SceneState::MAP1 || st == SceneState::MAP2) {
+		const auto enemyAABBs = m_pScene->GetAliveEnemyAABBs();
+		const float o[3] = { origin.x, origin.y, origin.z };
+		const float d[3] = { dir.x,   dir.y,   dir.z };
+		for (const auto& cb : enemyAABBs) {
+			const XMFLOAT3& c = cb.first;
+			const XMFLOAT3& h = cb.second;
+			const float bmin[3] = { c.x - h.x, c.y - h.y, c.z - h.z };
+			const float bmax[3] = { c.x + h.x, c.y + h.y, c.z + h.z };
+			float tmin = 0.0f;
+			float tmax = kMaxAimDist;
+			bool hit = true;
+			for (int i = 0; i < 3; ++i) {
+				if (fabsf(d[i]) < 1e-6f) {
+					if (o[i] < bmin[i] || o[i] > bmax[i]) { hit = false; break; }
+				}
+				else {
+					float t1 = (bmin[i] - o[i]) / d[i];
+					float t2 = (bmax[i] - o[i]) / d[i];
+					if (t1 > t2) std::swap(t1, t2);
+					if (t1 > tmin) tmin = t1;
+					if (t2 < tmax) tmax = t2;
+					if (tmin > tmax) { hit = false; break; }
+				}
+			}
+			if (hit && tmin < enemyDist) enemyDist = tmin;
+		}
+	}
+
+	const float t = (wallDist < enemyDist) ? wallDist : enemyDist;
+	return XMFLOAT3{
+		origin.x + dir.x * t,
+		origin.y + dir.y * t,
+		origin.z + dir.z * t };
+}
+
 void CGameFramework::UpdateRifleTransform()
 {
 	if (!m_pRifle || !m_pCamera) return;
@@ -943,7 +1017,6 @@ void CGameFramework::UpdateRifleTransform()
 	const float fRecoilOffset = computeRecoilOffset();
 
 	XMFLOAT3 pos;
-	XMFLOAT3 fwd;
 
 	if (m_pCamera->GetMode() == ECameraMode::FPS) {
 		// FPS: 카메라 기준 우측 하단(어깨총처럼 화면 한쪽에 보이도록).
@@ -957,7 +1030,6 @@ void CGameFramework::UpdateRifleTransform()
 		pos.x = camPos.x + camRight.x * kSide + aim.x * (kForward + fRecoilOffset);
 		pos.y = camPos.y - kDown              + aim.y * (kForward + fRecoilOffset);
 		pos.z = camPos.z + camRight.z * kSide + aim.z * (kForward + fRecoilOffset);
-		fwd = aim;
 	}
 	else {
 		// TPS: 플레이어 모델 오른쪽 어깨 옆. 메시 중심 높이는 modelCenter 와 동일.
@@ -968,8 +1040,15 @@ void CGameFramework::UpdateRifleTransform()
 		pos.x = m_xmf3PlayerPos.x + playerYawRight.x * 0.85f + sinf(yaw) * (kBaseForward + fRecoilOffset);
 		pos.y = modelCenterY;
 		pos.z = m_xmf3PlayerPos.z + playerYawRight.z * 0.85f + cosf(yaw) * (kBaseForward + fRecoilOffset);
-		fwd = aim;
 	}
+
+	// 총구가 조준점(화면 중심에서 쏜 광선의 첫 충돌점) 을 LookAt 하도록 forward 결정.
+	// FPS/TPS 양쪽에서 동일 — 카메라 위치와 총구 위치의 패럴랙스로 인한 어긋남이 해소된다.
+	const XMFLOAT3 target = GetAimTargetPoint();
+	XMFLOAT3 fwd{ target.x - pos.x, target.y - pos.y, target.z - pos.z };
+	const float fl = sqrtf(fwd.x * fwd.x + fwd.y * fwd.y + fwd.z * fwd.z);
+	if (fl > 1e-5f) { fwd.x /= fl; fwd.y /= fl; fwd.z /= fl; }
+	else            { fwd = aim; } // 폴백: 카메라 look 방향
 
 	m_pRifle->SetWorldOrientation(fwd, pos);
 }
@@ -981,17 +1060,17 @@ void CGameFramework::FireBullet()
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return;
 	if (m_fFireCooldown > 0.0f) return;
 
-	// 조준 방향(=조준선 방향): 카메라 모드와 무관하게 yaw/pitch 로부터 계산한다.
-	// FPS 에선 m_pCamera->GetLook() 과 동일. TPS 에선 카메라가 플레이어를 바라보므로
-	// GetLook() 을 그대로 쓸 수 없다 — 이 식이 정답.
+	// 폴백 조준 방향(소총 미준비 시): 카메라 yaw/pitch 로부터 계산.
 	const float yaw   = m_pCamera->GetYaw();
 	const float pitch = m_pCamera->GetPitch();
 	const float cp = cosf(pitch);
-	const XMFLOAT3 aim{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
+	const XMFLOAT3 camAim{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
 
-	// 발사 원점: 소총 총구. 소총 transform 은 UpdateRifleTransform 이 매 프레임 갱신한다.
-	// 소총이 아직 준비되지 않았다면 플레이어 머리 앞쪽으로 폴백.
+	// 발사 원점/방향: 소총 총구. 소총 transform 은 UpdateRifleTransform 이 매 프레임
+	// 조준점(GetAimTargetPoint) 을 LookAt 하도록 갱신하므로, 소총의 forward 가 곧
+	// "조준점을 향하는 방향" 이다. 총알 방향과 시각적 총구 방향이 항상 일치.
 	XMFLOAT3 origin;
+	XMFLOAT3 aim;
 	if (m_pRifle) {
 		const XMFLOAT3 rpos = m_pRifle->GetPosition();
 		const XMFLOAT3 rfwd = m_pRifle->GetLook(); // SetWorldOrientation 에서 _31..33 = forward
@@ -1000,12 +1079,14 @@ void CGameFramework::FireBullet()
 			rpos.x + rfwd.x * kMuzzle,
 			rpos.y + rfwd.y * kMuzzle,
 			rpos.z + rfwd.z * kMuzzle };
+		aim = rfwd;
 	}
 	else {
 		origin = XMFLOAT3{
-			m_xmf3PlayerPos.x + aim.x * 0.8f,
+			m_xmf3PlayerPos.x + camAim.x * 0.8f,
 			m_xmf3PlayerPos.y + 0.2f,
-			m_xmf3PlayerPos.z + aim.z * 0.8f };
+			m_xmf3PlayerPos.z + camAim.z * 0.8f };
+		aim = camAim;
 	}
 
 	const float kBulletSpeed = 50.0f;
@@ -1062,6 +1143,10 @@ void CGameFramework::SpawnEnemiesForMap(SceneState state)
 		// 머리 위 마커 메시 주입. 가시성은 AnimateObjects 가 잔여 적 수에 따라 토글한다.
 		if (m_pEnemyMarkerMesh) {
 			pEnemy->SetMarkerMesh(m_pEnemyMarkerMesh);
+		}
+		// 적 소총 메시 주입. CEnemyObject 가 Animate 마다 자신의 오른손 위치에 동기화한다.
+		if (m_pEnemyRifleMesh) {
+			pEnemy->SetRifleMesh(m_pEnemyRifleMesh);
 		}
 		m_pScene->AddObjectToCurrentMap(pEnemy);
 	}
@@ -1274,7 +1359,7 @@ void CGameFramework::FrameAdvance()
 	m_pd3dCommandList->OMSetRenderTargets(1, &d3dRtvCPUDescriptorHandle, FALSE,
 		&d3dDsvCPUDescriptorHandle);
 
-	float pfClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
+	float pfClearColor[4] = { 0.55f, 0.78f, 0.92f, 1.0f };
 	m_pd3dCommandList->ClearRenderTargetView(
 		d3dRtvCPUDescriptorHandle,
 		pfClearColor,

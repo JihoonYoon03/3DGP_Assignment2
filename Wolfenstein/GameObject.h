@@ -183,6 +183,12 @@ public:
 	// Scene::Render 가 살아있는 적 별로 마커를 추가 렌더할 수 있도록 raw 포인터 노출.
 	CGameObject* GetMarker() const { return m_pMarker.get(); }
 
+	// 적 소총 메시를 주입한다. SpawnEnemiesForMap 에서 호출. 내부에서 m_pRifle 을
+	// 생성하고 Animate 에서 매 프레임 오른손 위치(플레이어 방향 우측 + 전방)에 동기화.
+	void SetRifleMesh(std::shared_ptr<CMesh> pMesh);
+	// Scene::Render 가 살아있는 적 별로 소총을 추가 렌더할 수 있도록 raw 포인터 노출.
+	CGameObject* GetRifle() const { return m_pRifle.get(); }
+
 private:
 	EEnemyAIState m_eAIState;
 	float         m_fStateTimer;     // 현재 상태 남은 시간(초)
@@ -221,4 +227,8 @@ private:
 	// 적 머리 위로 동기화한다. 가시성은 m_bMarkerVisible 에 따라 Scene::Render 가 결정.
 	std::shared_ptr<CGameObject> m_pMarker;
 	bool                         m_bMarkerVisible = false;
+
+	// 오른손 소총. SetRifleMesh 호출 시 생성되며, Animate 가 매 프레임 위치/회전을
+	// 플레이어를 바라보는 오른쪽 위치에 동기화한다. 항상 표시 (적이 보이면 총도 보임).
+	std::shared_ptr<CGameObject> m_pRifle;
 };
