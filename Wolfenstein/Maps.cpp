@@ -37,6 +37,10 @@ namespace {
 	//   '1' ~ '3' : 바닥 큐브 자체가 STEP_H * n 높이로 솟아오른 단차 바닥
 	//               (별도의 슬랩을 위에 얹지 않고 큐브 윗면이 그 높이에 위치)
 	// 그 외 문자는 만나면 평면 바닥으로 처리.
+	//
+	// [Claude] 정적 미로 큐브를 단일 CMergedCubeMesh 로 통합하여 ~1800 draw call → 1 로
+	// 감소. 셀 색/크기 정보는 정점 색상으로 베이크되며 모든 큐브가 한 번에 그려진다.
+	// 회전이 없는 정적 기하만 통합 대상 (벽/바닥). 동적 객체(적/총알) 는 그대로 유지.
 	void BuildMazeFromGrid(
 		ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		std::vector<std::shared_ptr<CGameObject>>& vObjects,
@@ -65,6 +69,10 @@ namespace {
 		};
 		(void)colorPlatform;
 
+		// [Claude] 모든 정적 큐브 정보를 한 곳에 모았다가 마지막에 단일 메시로 합친다.
+		std::vector<CMergedCubeMesh::Cube> aggCubes;
+		aggCubes.reserve(static_cast<size_t>(rows) * cols * 2);
+
 		for (int r = 0; r < rows; ++r) {
 			for (int c = 0; c < cols; ++c) {
 				char ch = grid[r][c];
@@ -76,14 +84,14 @@ namespace {
 					// Wall cell. Keep a thin base tile under it so floor and
 					// wall corners stay flush at floor level 0.
 					const XMFLOAT4 fc = parity ? colorFloorA : colorFloorB;
-					AddCube(pd3dDevice, pd3dCommandList, vObjects,
+					aggCubes.push_back({
 						XMFLOAT3(x, -FLOOR_H * 0.5f, z),
-						XMFLOAT3(TILE, FLOOR_H, TILE), fc);
+						XMFLOAT3(TILE, FLOOR_H, TILE), fc });
 					const float wh = (wallHeights[r][c] > 0.0f) ? wallHeights[r][c] : WALL_H;
 					const XMFLOAT4 wc = parity ? colorWallA : colorWallB;
-					AddCube(pd3dDevice, pd3dCommandList, vObjects,
+					aggCubes.push_back({
 						XMFLOAT3(x, wh * 0.5f, z),
-						XMFLOAT3(TILE, wh, TILE), wc);
+						XMFLOAT3(TILE, wh, TILE), wc });
 					continue;
 				}
 
@@ -97,10 +105,19 @@ namespace {
 				const XMFLOAT4 baseColor = parity ? colorFloorA : colorFloorB;
 				const float t = (step > 0) ? (0.15f + 0.15f * step) : 0.0f;
 				const XMFLOAT4 fc = (step > 0) ? lerp4(baseColor, colorStair, t) : baseColor;
-				AddCube(pd3dDevice, pd3dCommandList, vObjects,
+				aggCubes.push_back({
 					XMFLOAT3(x, centerY, z),
-					XMFLOAT3(TILE, blockH, TILE), fc);
+					XMFLOAT3(TILE, blockH, TILE), fc });
 			}
+		}
+
+		// [Claude] 통합 메시 생성 + 단일 GameObject 로 push. 정점이 이미 월드 좌표라서
+		// world 행렬은 identity. world 행렬을 root constants 로 보내는 호출 1 번 + draw 1 번.
+		if (!aggCubes.empty()) {
+			auto pMesh = std::make_shared<CMergedCubeMesh>(pd3dDevice, pd3dCommandList, aggCubes);
+			auto pObj  = std::make_shared<CGameObject>();
+			pObj->SetMesh(pMesh);
+			vObjects.push_back(std::move(pObj));
 		}
 	}
 

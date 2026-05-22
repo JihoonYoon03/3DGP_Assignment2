@@ -197,6 +197,17 @@ private:
 	std::shared_ptr<CMesh>      m_pRifleMesh;
 	std::shared_ptr<CGameObject> m_pRifle;
 
+	// [Claude] 반동 애니메이션 타이머. FireBullet() 이 0.0 으로 리셋해 시작하고,
+	// UpdateRifleTransform() 이 3 개 키프레임 (뒤로 후진 → 절반 복귀 → 원위치) 으로
+	// 소총 위치에 forward-방향 오프셋을 더한다. 실제 발사 로직(데미지/속도/방향)
+	// 에는 영향이 없으며, 시각적 반동 연출만 담당. 음수면 비활성.
+	// 키프레임:  t=0.00  offset= 0.00
+	//            t=0.06  offset=-0.30  (최대 뒤로 후진)
+	//            t=0.14  offset=-0.10  (절반 복귀)
+	//            t=0.25  offset= 0.00  (원위치)
+	float m_fRecoilTimer = -1.0f;
+	static constexpr float kRecoilDuration = 0.25f;
+
 	// === 적 잔여 수 점 카운트(좌상단) ===
 	// SpawnEnemiesForMap 이 만드는 최대 적 수(10) 만큼 점을 미리 생성하고
 	// 살아있는 적 수만큼만 앞에서부터 그린다. 라이프 바와 동일한 패턴.
