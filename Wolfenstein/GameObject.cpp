@@ -607,7 +607,7 @@ void CEnemyObject::Animate(float fTimeElapsed)
 				if (m_pRifle) {
 					const XMFLOAT3 rpos = m_pRifle->GetPosition();
 					const XMFLOAT3 rfwd = m_pRifle->GetLook(); // +Z = 총구 방향
-					constexpr float kMuzzle = 0.7f; // 메시 깊이 1.2 의 절반 + 약간 (플레이어와 동일)
+					constexpr float kMuzzle = 1.25f; // 메시 깊이 2.4 의 절반 + 약간 (플레이어와 동일)
 					muzzle = XMFLOAT3{
 						rpos.x + rfwd.x * kMuzzle,
 						rpos.y + rfwd.y * kMuzzle,
@@ -657,9 +657,9 @@ void CEnemyObject::Animate(float fTimeElapsed)
 		// facing 의 우측 (월드 +Y 기준 외적: (facing × up) 는 facing 의 우측)
 		const XMFLOAT3 right{ -facing.z, 0.0f, facing.x };
 		const XMFLOAT3 riflePos{
-			myPos.x + right.x * 0.85f + facing.x * 0.4f,
+			myPos.x + right.x * 1.0f + facing.x * 0.3f,
 			myPos.y - m_xmf3AABBHalf.y + 1.6f, // 가슴 높이 (몸 바닥 + 1.6)
-			myPos.z + right.z * 0.85f + facing.z * 0.4f };
+			myPos.z + right.z * 1.0f + facing.z * 0.3f };
 		m_pRifle->SetWorldOrientation(facing, riflePos); // +Z = 총구 방향 = 본체 facing
 	}
 }
