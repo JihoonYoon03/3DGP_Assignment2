@@ -252,6 +252,10 @@ private:
 	float         m_fAimFreeze;      // 발사 직후 정지 타이머(초, ~0.3초)
 	bool          m_bAware;          // 한 번 본 후 영구 true
 	std::mt19937  m_rng;             // 인스턴스 전용 RNG
+	// Pursue 중 매 프레임 갱신되는 본체/소총 facing 단위 벡터(XZ).
+	// LOS 가 열려 있으면 플레이어 방향, 막혀 있으면 현재 이동 방향(= A* 다음
+	// 웨이포인트). 기본값은 +Z 로 두어 Pursue 진입 전엔 회전이 적용되지 않는다.
+	XMFLOAT3      m_xmf3FacingDir{ 0.0f, 0.0f, 1.0f };
 
 	std::function<void(const XMFLOAT3&, const XMFLOAT3&)> m_fnFire;
 	std::function<XMFLOAT3()>                            m_fnGetPlayer;

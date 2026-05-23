@@ -585,16 +585,23 @@ void CEnemyObject::Animate(float fTimeElapsed)
 				}
 			}
 
+			// facing 결정: 매 프레임 LOS 재평가. 시야가 열려 있으면 플레이어를 향하고,
+			// 벽 등으로 막혀 있으면 이번 프레임의 실제 이동 방향(= moveDir, A* 다음
+			// 웨이포인트 방향) 을 향한다. 본체와 소총 모두 같은 방향을 공유해 일관성 유지.
+			const bool bLos = HasLineOfSight(m_eSceneState, myPos, playerPos, MAP_EYE_HEIGHT);
+			m_xmf3FacingDir = bLos ? dir : moveDir;
+			SetWorldOrientation(m_xmf3FacingDir, GetPosition());
+
 			// 발사 직후 m_fAimFreeze 동안은 정지 (발사 연출).
 			if (m_fAimFreeze <= 0.0f) {
 				TryMoveXZ(moveDir, kStep);
 			}
 
-			// 발사 쿨다운이 끝나면 총알 발사. 소총이 있으면 총구 위치/방향에서,
-			// 없으면 가슴 높이 폴백. 총구 방향과 총알 방향이 일치해야 시각적으로 자연스럽다.
+			// 발사 쿨다운이 끝나면 총알 발사. muzzle 은 소총 총구(없으면 가슴 높이 폴백)에서
+			// 출발하지만, 총알 방향은 항상 muzzle → 플레이어 중심으로 재계산해 오프셋 때문에
+			// 비껴 지나가지 않게 한다.
 			if (m_fFireCooldown <= 0.0f && m_fnFire) {
 				XMFLOAT3 muzzle;
-				XMFLOAT3 fireDir = dir; // 폴백: 플레이어 방향 (XZ 단위벡터)
 				if (m_pRifle) {
 					const XMFLOAT3 rpos = m_pRifle->GetPosition();
 					const XMFLOAT3 rfwd = m_pRifle->GetLook(); // +Z = 총구 방향
@@ -603,7 +610,6 @@ void CEnemyObject::Animate(float fTimeElapsed)
 						rpos.x + rfwd.x * kMuzzle,
 						rpos.y + rfwd.y * kMuzzle,
 						rpos.z + rfwd.z * kMuzzle };
-					fireDir = rfwd;
 				}
 				else {
 					muzzle = XMFLOAT3{
@@ -611,6 +617,12 @@ void CEnemyObject::Animate(float fTimeElapsed)
 						myPos.y + 0.2f,
 						myPos.z + dir.z * 0.8f };
 				}
+				XMFLOAT3 fireDir{ playerPos.x - muzzle.x,
+				                  playerPos.y - muzzle.y,
+				                  playerPos.z - muzzle.z };
+				const float fl = sqrtf(fireDir.x * fireDir.x + fireDir.y * fireDir.y + fireDir.z * fireDir.z);
+				if (fl > 1e-5f) { fireDir.x /= fl; fireDir.y /= fl; fireDir.z /= fl; }
+				else            { fireDir = dir; }
 				m_fnFire(muzzle, fireDir);
 				m_fFireCooldown = RandFloat(2.0f, 3.0f);
 				m_fAimFreeze = 0.3f;
@@ -632,26 +644,20 @@ void CEnemyObject::Animate(float fTimeElapsed)
 		m_pMarker->SetPosition(markerPos);
 	}
 
-	// 오른손 소총 transform 동기화. 플레이어를 향하는 XZ 단위 dir 의 우측으로 0.85,
-	// dir 방향으로 0.4 떨어진 가슴 높이에 배치하고 +Z 가 플레이어를 향하게 회전.
-	// 적이 보이면 총도 같이 보임 — 가시성 토글 없이 항상 위치만 동기화.
+	// 오른손 소총 transform 동기화. 본체와 동일한 m_xmf3FacingDir 을 forward 로 사용해
+	// (Pursue 진입 전엔 기본 +Z, Pursue 중엔 LOS 면 플레이어 / 막히면 이동 방향) 그 우측
+	// 0.85, forward 0.4 떨어진 가슴 높이에 배치한다. 적이 보이면 총도 같이 보임 —
+	// 가시성 토글 없이 항상 위치만 동기화.
 	if (m_pRifle) {
-		XMFLOAT3 myPos = GetPosition();
-		XMFLOAT3 toPlayer{ 0.0f, 0.0f, 1.0f };
-		if (m_fnGetPlayer) {
-			const XMFLOAT3 pp = m_fnGetPlayer();
-			toPlayer = XMFLOAT3{ pp.x - myPos.x, 0.0f, pp.z - myPos.z };
-		}
-		float len = sqrtf(toPlayer.x * toPlayer.x + toPlayer.z * toPlayer.z);
-		if (len > 1e-5f) { toPlayer.x /= len; toPlayer.z /= len; }
-		else             { toPlayer = XMFLOAT3{ 0.0f, 0.0f, 1.0f }; }
-		// dir 의 우측 (월드 +Y 기준 외적: (dir × up) 는 dir 의 우측)
-		const XMFLOAT3 right{ -toPlayer.z, 0.0f, toPlayer.x };
+		const XMFLOAT3 myPos = GetPosition();
+		const XMFLOAT3& facing = m_xmf3FacingDir;
+		// facing 의 우측 (월드 +Y 기준 외적: (facing × up) 는 facing 의 우측)
+		const XMFLOAT3 right{ -facing.z, 0.0f, facing.x };
 		const XMFLOAT3 riflePos{
-			myPos.x + right.x * 0.85f + toPlayer.x * 0.4f,
+			myPos.x + right.x * 0.85f + facing.x * 0.4f,
 			myPos.y - m_xmf3AABBHalf.y + 1.6f, // 가슴 높이 (몸 바닥 + 1.6)
-			myPos.z + right.z * 0.85f + toPlayer.z * 0.4f };
-		m_pRifle->SetWorldOrientation(toPlayer, riflePos); // +Z = 총구 방향 = 플레이어 방향
+			myPos.z + right.z * 0.85f + facing.z * 0.4f };
+		m_pRifle->SetWorldOrientation(facing, riflePos); // +Z = 총구 방향 = 본체 facing
 	}
 }
 

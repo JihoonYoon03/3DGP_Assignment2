@@ -17,7 +17,7 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 
 	// ??? ??????: [0] ???? ??? ??? (32??? ??? 16??)
 	//                [1] ??/???? ??? (32??? ??? 32??)
-	D3D12_ROOT_PARAMETER pd3dRootParameters[3];
+	D3D12_ROOT_PARAMETER pd3dRootParameters[4];
 	// [0] b0: 월드 변환 행렬 (VS 전용, 16 floats)
 	pd3dRootParameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	pd3dRootParameters[0].Constants.Num32BitValues = 16;
@@ -37,6 +37,14 @@ ID3D12RootSignature* CScene::CreateGraphicsRootSignature(ID3D12Device* pd3dDevic
 	pd3dRootParameters[2].Constants.ShaderRegister = 2;
 	pd3dRootParameters[2].Constants.RegisterSpace = 0;
 	pd3dRootParameters[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	// [3] b3: screen-space FX (PS only). Currently holds a single float used
+	//        as the hit-flash intensity for the damage vignette overlay. Updates
+	//        only when the player just took a hit so a root constant is sufficient.
+	pd3dRootParameters[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	pd3dRootParameters[3].Constants.Num32BitValues = 1;
+	pd3dRootParameters[3].Constants.ShaderRegister = 3;
+	pd3dRootParameters[3].Constants.RegisterSpace = 0;
+	pd3dRootParameters[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	// PS 에서 b2(라이트 상수) 접근이 필요하므로 DENY_PIXEL_SHADER_ROOT_ACCESS 제거.
 	D3D12_ROOT_SIGNATURE_FLAGS d3dRootSignatureFlags =

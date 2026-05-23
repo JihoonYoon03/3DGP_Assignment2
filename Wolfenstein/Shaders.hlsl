@@ -22,6 +22,13 @@ cbuffer cbLightInfo : register(b2)
     float  gLightPad2     : packoffset(c2.w);
 };
 
+// 스크린 FX 상수 (b3, PS 전용). 현재는 피격 비네트의 강도 1 float 만 사용.
+// 피격 시 1.0, 매 프레임 elapsed 비례 감쇠해 0 도달.
+cbuffer cbScreenFx : register(b3)
+{
+    float gHitFlash : packoffset(c0.x);
+};
+
 // =============================================================
 // 디퓨즈 라이팅용 정점 셰이더
 // slot 0: POSITION + COLOR
@@ -103,4 +110,37 @@ VS_HUD_OUTPUT VSHud(VS_HUD_INPUT input)
 float4 PSHud(VS_HUD_OUTPUT input) : SV_TARGET
 {
     return input.color;
+}
+
+// =============================================================
+// 피격 비네트 오버레이
+// VS_HUD_INPUT 의 POSITION 을 그대로 NDC 로 출력하면서, ndc 값을
+// TEXCOORD0 로 패스스루해 PS 가 중심으로부터의 반경을 알 수 있게 한다.
+// PS 는 외곽으로 갈수록 짙은 빨강으로 그라데이션되는 알파 마스크를
+// 만든다 (smoothstep 0.45→1.0). gHitFlash 가 0 에 가까운 픽셀은
+// discard 로 일찍 종료시켜 블렌딩/ROP 비용을 줄인다.
+// =============================================================
+struct VS_OVERLAY_OUTPUT
+{
+    float4 position : SV_POSITION;
+    float2 ndc      : TEXCOORD0;   // [-1, 1] 범위, 0 이 화면 중앙
+};
+
+VS_OVERLAY_OUTPUT VSHitOverlay(VS_HUD_INPUT input)
+{
+    VS_OVERLAY_OUTPUT output;
+    output.position = float4(input.position.x, input.position.y, 0.0f, 1.0f);
+    output.ndc      = float2(input.position.x, input.position.y);
+    return output;
+}
+
+float4 PSHitOverlay(VS_OVERLAY_OUTPUT input) : SV_TARGET
+{
+    // |ndc| 의 코너 값(sqrt(2) ~= 1.414) 을 1.0 으로 정규화해 외곽 가중치 계산.
+    float r = length(input.ndc) * 0.7071f;
+    // 중심부 ~45% 반경은 완전 투명, 그 외곽으로 갈수록 부드럽게 짙어진다.
+    float mask = smoothstep(0.45f, 1.0f, r);
+    float a    = mask * gHitFlash;
+    if (a < 0.005f) discard;                  // 거의 안 보이면 일찍 종료 (블렌드 비용 절감)
+    return float4(0.85f, 0.05f, 0.05f, a);    // 짙은 빨강 + 가변 알파
 }

@@ -392,6 +392,23 @@ void CGameFramework::BuildObjects()
 		m_pHudShader->CreateShader(m_pd3dDevice.Get(), m_pScene->GetGraphicsRootSignature());
 	}
 
+	// 피격 비네트 오버레이 셰이더 + 풀스크린 NDC 쿼드. 깊이/컬링 OFF + alpha blend ON.
+	// m_fHitFlash > 0 일 때만 1회 드로우.
+	m_pHitOverlayShader = std::make_shared<CHitOverlayShader>();
+	if (m_pScene) {
+		m_pHitOverlayShader->CreateShader(m_pd3dDevice.Get(), m_pScene->GetGraphicsRootSignature());
+	}
+	{
+		auto pOverlayMesh = std::make_shared<CHudQuadMesh>(
+			m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
+			-1.0f, 1.0f, 1.0f, -1.0f,                     // NDC 풀스크린 (PS 가 색을 결정하므로 vertex color 는 무시됨)
+			XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f));
+		m_pHitOverlayQuad = std::make_shared<CGameObject>();
+		m_pHitOverlayQuad->SetMesh(pOverlayMesh);
+		// 셰이더 바인딩은 렌더 단계에서 명시적으로 m_pHitOverlayShader->Render 호출로 처리한다
+		// (b3 루트 상수 set 와 묶어서 순서 보장). 따라서 m_pHitOverlayQuad 에 SetShader 하지 않는다.
+	}
+
 	// ȭ�� ���߾� ���� ���ڼ�(+) ������. ������ NDC(Ŭ�� ����) ��ǥ�� �̸�
 	// ���� �����Ƿ� ī�޶� ȸ��/�̵��� �����ϰ� �׻� ȭ�� ������� �׷�����.
 	{
@@ -536,6 +553,8 @@ void CGameFramework::BuildObjects()
 			if (!m_pPlayer) return;
 			if (m_pPlayer->GetHP() > 0) m_pPlayer->TakeDamage(1);
 			if (m_pPlayer->GetHP() <= 0) m_bResetPending = true;
+			// 피격 비네트를 최대 강도로 리셋 — FrameAdvance 가 매 프레임 감쇠시킨다.
+			m_fHitFlash = 1.0f;
 		});
 	}
 
@@ -564,6 +583,7 @@ void CGameFramework::BuildObjects()
 	for (auto& pLetter : m_pWinLetters) {
 		if (pLetter) pLetter->ReleaseUploadBuffers();
 	}
+	if (m_pHitOverlayQuad) m_pHitOverlayQuad->ReleaseUploadBuffers();
 
 	m_GameTimer.Reset();
 }
@@ -1143,7 +1163,7 @@ void CGameFramework::SpawnEnemiesForMap(SceneState state)
 	// 적 AABB half y = 1.3 (전체 높이 2.6). 플레이어 반경 5타일 바깥에서 스폰 위치 선택.
 	const float kEnemyHalfY = 1.3f;
 	const XMFLOAT3 playerPos = m_pPlayer ? m_pPlayer->GetPosition() : XMFLOAT3{ 0, 0, 0 };
-	std::vector<XMFLOAT3> spawns = PickEnemySpawnPositions(state, playerPos, 10, kEnemyHalfY);
+	std::vector<XMFLOAT3> spawns = PickEnemySpawnPositions(state, playerPos, 12, kEnemyHalfY);
 
 	std::mt19937 seedGen{ std::random_device{}() };
 	for (const XMFLOAT3& pos : spawns) {
@@ -1354,6 +1374,12 @@ void CGameFramework::FrameAdvance()
 	// ?????? ?��? ????, ???/???????/?????? ????.
 	m_GameTimer.Tick(0.0f);
 
+	// 피격 비네트 감쇠: elapsed 시간에 비례해 m_fHitFlash 를 0 까지 선형 감산.
+	if (m_fHitFlash > 0.0f) {
+		m_fHitFlash -= kHitFlashDecayRate * m_GameTimer.GetTimeElapsed();
+		if (m_fHitFlash < 0.0f) m_fHitFlash = 0.0f;
+	}
+
 	ProcessInput();
 
 	AnimateObjects();
@@ -1450,6 +1476,15 @@ void CGameFramework::FrameAdvance()
 				for (auto& pLetter : m_pWinLetters) {
 					if (pLetter) pLetter->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 				}
+			}
+
+			// 피격 비네트 — 가장 마지막에 덧칠해 모든 UI 위에 오도록 한다.
+			// CHudShader 와 다른 PSO(alpha blend ON) 가 필요하므로 명시적으로 셰이더를 바인딩하고
+			// b3 루트 상수로 현재 flash 강도를 전달한 뒤 풀스크린 쿼드를 1회 드로우한다.
+			if (m_fHitFlash > 0.0f && m_pHitOverlayShader && m_pHitOverlayQuad) {
+				m_pHitOverlayShader->Render(m_pd3dCommandList.Get(), m_pCamera.get());
+				m_pd3dCommandList->SetGraphicsRoot32BitConstants(3, 1, &m_fHitFlash, 0);
+				m_pHitOverlayQuad->Render(m_pd3dCommandList.Get(), m_pCamera.get());
 			}
 		}
 	}
