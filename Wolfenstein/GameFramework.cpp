@@ -367,7 +367,7 @@ void CGameFramework::BuildObjects()
 	XMStoreFloat4x4(&m16Xform,
 		XMMatrixTranslation(1.815f, -0.17f, 0.0f) *
 		XMMatrixRotationY(+XM_PIDIV2) *
-		XMMatrixScaling(0.242f, 0.242f, 0.242f));
+		XMMatrixScaling(0.24f, 0.24f, 0.24f));
 	m_pRifleMesh = std::make_shared<CObjMesh>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		L"../Resources/M16.obj",
@@ -395,7 +395,7 @@ void CGameFramework::BuildObjects()
 	XMStoreFloat4x4(&ak47Xform,
 		XMMatrixTranslation(0.02f, 0.14f, 0.0f) *
 		XMMatrixRotationY(-XM_PIDIV2) *
-		XMMatrixScaling(0.118f, 0.118f, 0.118f));
+		XMMatrixScaling(0.24f, 0.24f, 0.24f));
 	m_pEnemyRifleMesh = std::make_shared<CObjMesh>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		L"../Resources/AK47.obj",
@@ -1084,9 +1084,9 @@ void CGameFramework::UpdateRifleTransform()
 		// [Claude] ??????? 0.1 ?? ????? 1.7 forward ?? ????? ???? (1.1 >> 0.1).
 		const XMFLOAT3 camPos   = m_pCamera->GetPosition();
 		const XMFLOAT3 camRight = m_pCamera->GetRight();
-		const float kForward = 1.7f;
-		const float kSide    = 0.45f;
-		const float kDown    = 0.35f;
+		const float kForward = 0.5f;
+		const float kSide    = 0.55f;
+		const float kDown    = 0.45f;
 		// [Claude] ??? ???????? aim ????(=forward) ???? ???? ??? ?? ?????? ??? ???????.
 		pos.x = camPos.x + camRight.x * kSide + aim.x * (kForward + fRecoilOffset);
 		pos.y = camPos.y - kDown              + aim.y * (kForward + fRecoilOffset);
@@ -1098,10 +1098,10 @@ void CGameFramework::UpdateRifleTransform()
 		const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 		const float modelCenterY = playerPos.y - MAP_EYE_HEIGHT + 1.3f;
 		// [Claude] TPS ?????? ??? ???????? yaw ????(=??? ????) ???? ?????.
-		const float kBaseForward = 0.4f;
-		pos.x = playerPos.x + playerYawRight.x * 0.85f + sinf(yaw) * (kBaseForward + fRecoilOffset);
+		const float kBaseForward = 0.3f;
+		pos.x = playerPos.x + playerYawRight.x * 1.0f + sinf(yaw) * (kBaseForward + fRecoilOffset);
 		pos.y = modelCenterY;
-		pos.z = playerPos.z + playerYawRight.z * 0.85f + cosf(yaw) * (kBaseForward + fRecoilOffset);
+		pos.z = playerPos.z + playerYawRight.z * 1.0f + cosf(yaw) * (kBaseForward + fRecoilOffset);
 	}
 
 	// ????? ??????(??? ?????? ?? ?????? ? ?תפ??) ?? LookAt ????? forward ????.
@@ -1137,7 +1137,7 @@ void CGameFramework::FireBullet()
 	if (pRifle) {
 		const XMFLOAT3 rpos = pRifle->GetPosition();
 		const XMFLOAT3 rfwd = pRifle->GetLook(); // SetWorldOrientation ???? _31..33 = forward
-		const float kMuzzle = 0.7f;
+		const float kMuzzle = 1.25f;
 		origin = XMFLOAT3{
 			rpos.x + rfwd.x * kMuzzle,
 			rpos.y + rfwd.y * kMuzzle,
