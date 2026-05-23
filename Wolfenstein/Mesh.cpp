@@ -1,6 +1,11 @@
 ﻿#include "stdafx.h"
 #include "Mesh.h"
 
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include <cctype>
+
 // ====================================================================================
 CMesh::CMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList)
 // ====================================================================================
@@ -376,6 +381,274 @@ CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	m_pd3dNormalBuffer = ::CreateBufferResource(
 		pd3dDevice, pd3dCommandList,
 		normals.data(), normalStride * m_nVertices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dNormalUploadBuffer);
+	m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
+	m_d3dNormalBufferView.StrideInBytes  = normalStride;
+	m_d3dNormalBufferView.SizeInBytes    = normalStride * m_nVertices;
+	m_bHasNormals = true;
+}
+
+
+// ====================================================================================
+// [Claude] CObjMesh — Wavefront .obj 파일 로더
+// ====================================================================================
+// Resources/*.obj 같은 외부 메시 파일을 런타임에 읽어 정점/노멀/인덱스 버퍼를 채운다.
+// 텍스처가 없는 파이프라인이므로 색상은 (1) o 그룹 이름 → 내장 부품 색상 테이블,
+// (2) 일치 없으면 호출자가 넘긴 폴백 색으로 결정한다. 면 단위 평탄 음영을 위해
+// 페이스마다 정점을 새로 생성한다(공유 X).
+namespace {
+
+// 대소문자 무시 비교용 — std::tolower 는 char 가 음수일 때 UB 이므로 unsigned char 캐스트.
+inline char ToLowerASCII(char c) {
+	return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+}
+
+bool EqualsIgnoreCase(const std::string& a, const char* b) {
+	const size_t la = a.size();
+	for (size_t i = 0; i < la; ++i) {
+		if (b[i] == '\0') return false;
+		if (ToLowerASCII(a[i]) != ToLowerASCII(b[i])) return false;
+	}
+	return b[la] == '\0';
+}
+
+// 부품 이름 → 색상. 일치하는 항목이 없으면 fallback 반환.
+// (대소문자 무시) — Blender export 의 o 그룹 이름과 매칭한다.
+XMFLOAT4 ResolveGunPartColor(const std::string& sName, XMFLOAT4 fallback) {
+	// 나무 개머리판
+	if (EqualsIgnoreCase(sName, "Stock"))        return XMFLOAT4(0.35f, 0.22f, 0.12f, 1.0f);
+	// 짙은 메탈 매거진
+	if (EqualsIgnoreCase(sName, "Mag"))          return XMFLOAT4(0.12f, 0.12f, 0.13f, 1.0f);
+	if (EqualsIgnoreCase(sName, "Magazine"))     return XMFLOAT4(0.12f, 0.12f, 0.13f, 1.0f);
+	// 검은 폴리머 — 트리거/그립/안전장치
+	if (EqualsIgnoreCase(sName, "Trigger"))      return XMFLOAT4(0.10f, 0.08f, 0.08f, 1.0f);
+	if (EqualsIgnoreCase(sName, "Grip"))         return XMFLOAT4(0.10f, 0.08f, 0.08f, 1.0f);
+	if (EqualsIgnoreCase(sName, "Safety"))       return XMFLOAT4(0.10f, 0.08f, 0.08f, 1.0f);
+	// 블루드 강철 — 조준기
+	if (EqualsIgnoreCase(sName, "IronSight"))    return XMFLOAT4(0.10f, 0.10f, 0.12f, 1.0f);
+	if (EqualsIgnoreCase(sName, "Sight"))        return XMFLOAT4(0.10f, 0.10f, 0.12f, 1.0f);
+	// 액센트 회색 — 노리쇠/장전 손잡이/전진기
+	if (EqualsIgnoreCase(sName, "ChargingHandle")) return XMFLOAT4(0.20f, 0.20f, 0.22f, 1.0f);
+	if (EqualsIgnoreCase(sName, "Bolt"))         return XMFLOAT4(0.20f, 0.20f, 0.22f, 1.0f);
+	if (EqualsIgnoreCase(sName, "ForwardAssist")) return XMFLOAT4(0.20f, 0.20f, 0.22f, 1.0f);
+	// 그 외 — 호출자 폴백 (Front, Base, Body 등 메인 바디 부품)
+	return fallback;
+}
+
+// "v/vt/vn" / "v//vn" / "v/vt" / "v" 형식의 페이스 토큰에서 (정점 idx, 노멀 idx) 추출.
+// idx 는 1-based 원본 그대로 반환(0 = 없음/생략). 음수(상대 인덱스) 도 그대로 전달.
+struct FaceToken { int v; int n; };
+FaceToken ParseFaceToken(const std::string& tok) {
+	FaceToken r{ 0, 0 };
+	const char* s = tok.c_str();
+	const char* end = s + tok.size();
+
+	// 첫 슬래시 전까지 = v
+	const char* p = s;
+	while (p < end && *p != '/') ++p;
+	if (p > s) r.v = std::atoi(std::string(s, p).c_str());
+	if (p >= end) return r;
+
+	// 첫 슬래시 다음, 두 번째 슬래시 전까지 = vt (사용 안 함). v//vn 이면 빈 문자열.
+	++p; // skip first '/'
+	const char* p2 = p;
+	while (p2 < end && *p2 != '/') ++p2;
+	// vt 무시
+	if (p2 >= end) return r; // v/vt 형식 (vn 없음)
+
+	// 두 번째 슬래시 다음 = vn
+	++p2;
+	if (p2 < end) r.n = std::atoi(std::string(p2, end).c_str());
+	return r;
+}
+
+} // namespace
+
+CObjMesh::CObjMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+	const std::wstring& wsObjPath,
+	XMFLOAT4 xmf4FallbackColor,
+	const XMFLOAT4X4& xmf4x4ModelTransform)
+	: CMesh(pd3dDevice, pd3dCommandList)
+{
+	m_nStride = sizeof(CDiffusedVertex);
+	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 1) 파일 로드. 실패 시 빈 메시로 두고 종료(렌더 안전).
+	std::ifstream ifs(wsObjPath);
+	if (!ifs.is_open()) {
+		OutputDebugStringW(L"[CObjMesh] failed to open: ");
+		OutputDebugStringW(wsObjPath.c_str());
+		OutputDebugStringW(L"\n");
+		return;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 2) 라인 파싱: v/vn/f/o 만 의미 있게 처리, 나머지는 무시.
+	std::vector<XMFLOAT3> positions;
+	std::vector<XMFLOAT3> normals;
+
+	// 각 페이스의 (정점/노멀) 인덱스 — fan triangulation 결과를 모은다.
+	// 인덱스는 1-based 원본 값. 음수는 상대 인덱스로 처리.
+	// 또한 페이스마다 현재 o 그룹 색상을 함께 기록한다.
+	struct Tri { FaceToken a, b, c; XMFLOAT4 color; };
+	std::vector<Tri> tris;
+	tris.reserve(1024);
+
+	XMFLOAT4 currentColor = xmf4FallbackColor;
+	std::string line;
+	while (std::getline(ifs, line)) {
+		if (line.empty()) continue;
+		// 줄 끝의 \r 제거(Windows export 호환).
+		while (!line.empty() && (line.back() == '\r' || line.back() == '\n')) line.pop_back();
+		if (line.empty()) continue;
+		if (line[0] == '#') continue;
+
+		std::istringstream iss(line);
+		std::string tag;
+		iss >> tag;
+		if (tag == "v") {
+			XMFLOAT3 p;
+			iss >> p.x >> p.y >> p.z;
+			positions.push_back(p);
+		}
+		else if (tag == "vn") {
+			XMFLOAT3 n;
+			iss >> n.x >> n.y >> n.z;
+			normals.push_back(n);
+		}
+		else if (tag == "o") {
+			std::string name;
+			iss >> name;
+			currentColor = ResolveGunPartColor(name, xmf4FallbackColor);
+		}
+		else if (tag == "f") {
+			// 페이스 정점들을 모두 읽고 fan triangulation.
+			std::vector<FaceToken> verts;
+			std::string tok;
+			while (iss >> tok) verts.push_back(ParseFaceToken(tok));
+			if (verts.size() < 3) continue;
+			for (size_t i = 1; i + 1 < verts.size(); ++i) {
+				tris.push_back({ verts[0], verts[i], verts[i + 1], currentColor });
+			}
+		}
+		// vt, s, g, usemtl, mtllib 는 무시.
+	}
+
+	if (tris.empty() || positions.empty()) {
+		OutputDebugStringW(L"[CObjMesh] empty mesh after parsing\n");
+		return;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 3) 모델 변환 행렬을 로드. 위치는 TransformCoord, 노멀은 TransformNormal 후 정규화.
+	const XMMATRIX mXform = XMLoadFloat4x4(&xmf4x4ModelTransform);
+
+	// 1-based 인덱스 → 0-based 절대 인덱스. 음수는 (크기 + idx) 로 변환.
+	auto ResolveVertIdx = [&](int idx) -> int {
+		if (idx > 0) return idx - 1;
+		if (idx < 0) return static_cast<int>(positions.size()) + idx;
+		return -1;
+	};
+	auto ResolveNormIdx = [&](int idx) -> int {
+		if (idx > 0) return idx - 1;
+		if (idx < 0) return static_cast<int>(normals.size()) + idx;
+		return -1;
+	};
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 4) 삼각형마다 정점 3 개를 새로 만든다(공유 X → flat shading 보장).
+	std::vector<CDiffusedVertex> vertices;
+	std::vector<CNormalVertex>   meshNormals;
+	std::vector<UINT>            indices;
+	vertices.reserve(tris.size() * 3);
+	meshNormals.reserve(tris.size() * 3);
+	indices.reserve(tris.size() * 3);
+
+	for (const Tri& t : tris) {
+		const int ia = ResolveVertIdx(t.a.v);
+		const int ib = ResolveVertIdx(t.b.v);
+		const int ic = ResolveVertIdx(t.c.v);
+		if (ia < 0 || ib < 0 || ic < 0) continue;
+		if (ia >= (int)positions.size() || ib >= (int)positions.size() || ic >= (int)positions.size()) continue;
+
+		// 위치를 변환 행렬로 베이크.
+		const XMVECTOR vA = XMVector3TransformCoord(XMLoadFloat3(&positions[ia]), mXform);
+		const XMVECTOR vB = XMVector3TransformCoord(XMLoadFloat3(&positions[ib]), mXform);
+		const XMVECTOR vC = XMVector3TransformCoord(XMLoadFloat3(&positions[ic]), mXform);
+		XMFLOAT3 pa, pb, pc;
+		XMStoreFloat3(&pa, vA);
+		XMStoreFloat3(&pb, vB);
+		XMStoreFloat3(&pc, vC);
+
+		// 노멀 결정: OBJ 의 vn 이 있으면 그것을, 없으면 면 노멀 계산.
+		XMVECTOR vN;
+		const int na = ResolveNormIdx(t.a.n);
+		const int nb = ResolveNormIdx(t.b.n);
+		const int nc = ResolveNormIdx(t.c.n);
+		if (na >= 0 && nb >= 0 && nc >= 0
+			&& na < (int)normals.size() && nb < (int)normals.size() && nc < (int)normals.size()) {
+			// 평탄 음영 — 세 노멀 평균을 면 노멀로 사용한다(같은 값이면 그대로).
+			XMVECTOR vNa = XMLoadFloat3(&normals[na]);
+			XMVECTOR vNb = XMLoadFloat3(&normals[nb]);
+			XMVECTOR vNc = XMLoadFloat3(&normals[nc]);
+			vN = XMVectorAdd(XMVectorAdd(vNa, vNb), vNc);
+			vN = XMVector3TransformNormal(vN, mXform);
+			vN = XMVector3Normalize(vN);
+		}
+		else {
+			// vn 누락 — (B - A) × (C - A) 로 면 노멀 계산(이미 베이크된 좌표 기준).
+			const XMVECTOR vAB = XMVectorSubtract(vB, vA);
+			const XMVECTOR vAC = XMVectorSubtract(vC, vA);
+			vN = XMVector3Normalize(XMVector3Cross(vAB, vAC));
+		}
+		XMFLOAT3 n3;
+		XMStoreFloat3(&n3, vN);
+
+		const UINT base = static_cast<UINT>(vertices.size());
+		vertices.emplace_back(pa, t.color);
+		vertices.emplace_back(pb, t.color);
+		vertices.emplace_back(pc, t.color);
+		meshNormals.emplace_back(n3);
+		meshNormals.emplace_back(n3);
+		meshNormals.emplace_back(n3);
+		indices.push_back(base + 0);
+		indices.push_back(base + 1);
+		indices.push_back(base + 2);
+	}
+
+	m_nVertices = static_cast<UINT>(vertices.size());
+	m_nIndices  = static_cast<UINT>(indices.size());
+	if (m_nVertices == 0 || m_nIndices == 0) return;
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// 5) GPU 버퍼 생성 — CCubeMeshDiffused/CMergedCubeMesh 와 동일 패턴.
+	// 정점 버퍼 (slot 0)
+	m_pd3dVertexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		vertices.data(), m_nStride * m_nVertices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+		&m_pd3dVertexUploadBuffer);
+	m_d3dVertexBufferView.BufferLocation = m_pd3dVertexBuffer->GetGPUVirtualAddress();
+	m_d3dVertexBufferView.StrideInBytes  = m_nStride;
+	m_d3dVertexBufferView.SizeInBytes    = m_nStride * m_nVertices;
+
+	// 인덱스 버퍼
+	m_pd3dIndexBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		indices.data(), sizeof(UINT) * m_nIndices,
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_INDEX_BUFFER,
+		&m_pd3dIndexUploadBuffer);
+	m_d3dIndexBufferView.BufferLocation = m_pd3dIndexBuffer->GetGPUVirtualAddress();
+	m_d3dIndexBufferView.Format         = DXGI_FORMAT_R32_UINT;
+	m_d3dIndexBufferView.SizeInBytes    = sizeof(UINT) * m_nIndices;
+
+	// 노멀 버퍼 (slot 1)
+	const UINT normalStride = sizeof(CNormalVertex);
+	m_pd3dNormalBuffer = ::CreateBufferResource(
+		pd3dDevice, pd3dCommandList,
+		meshNormals.data(), normalStride * m_nVertices,
 		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
 		&m_pd3dNormalUploadBuffer);
 	m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();

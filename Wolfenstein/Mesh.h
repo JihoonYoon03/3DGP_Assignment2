@@ -126,6 +126,33 @@ public:
 	virtual ~CMergedCubeMesh() = default;
 };
 
+// [Claude] Wavefront .obj 파일을 로드해 정점/노멀/인덱스 버퍼를 채우는 메시.
+// 면 단위 평탄 음영(flat shading) — 각 페이스의 모든 정점이 그 페이스의 노멀을 갖도록
+// 정점을 페이스 별로 분리한다(CCubeMeshDiffused 와 동일 방식).
+//
+// xmf4x4ModelTransform: 모델 좌표계 → 엔진 좌표계 변환을 정점/노멀에 베이크한다.
+//   - 회전: 모델의 forward 축을 엔진의 +Z 로 정렬.
+//   - 스케일: 원본 단위 → 게임 단위로 축소(소총은 ~1.2).
+//   - 평행이동: 모델 중심을 원점으로 옮기는 보정.
+// 호출자가 이 행렬을 조정해 방향이 맞지 않는 경우를 보정한다.
+//
+// xmf4FallbackColor: o 그룹 이름이 내장 부품 색상 테이블에 없을 때의 폴백 색.
+//   ("Stock" → 우드, "Mag" → 짙은 메탈 / "Front", "Base" → 폴백 색)
+//
+// 지원 포맷: v / vn / f, 페이스는 v//vn 또는 v/vt/vn 또는 v/vt 또는 v 모두 허용.
+// n-gon(>3) 페이스는 fan triangulation 으로 삼각형 분할.
+// vn 이 없는 페이스는 정점 위치로부터 면 노멀을 계산(cross product).
+// vt 와 s 는 무시. o 그룹 이름은 부품별 색상 분배에 사용.
+class CObjMesh : public CMesh
+{
+public:
+	CObjMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
+		const std::wstring& wsObjPath,
+		XMFLOAT4 xmf4FallbackColor = XMFLOAT4(0.25f, 0.25f, 0.28f, 1.0f),
+		const XMFLOAT4X4& xmf4x4ModelTransform = Matrix4x4::Identity());
+	virtual ~CObjMesh() = default;
+};
+
 // 화면 정중앙에 회전 없이 고정되는 십자선(+) 조준점 메시.
 // 정점은 NDC(클립 공간) 좌표로 직접 저장되므로 월드/뷰/투영 행렬을 거치지 않는
 // VSHud 셰이더와 함께 사용해야 한다. 두 직사각형(가로 막대 + 세로 막대) 으로
