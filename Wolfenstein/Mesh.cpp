@@ -92,28 +92,69 @@ CCubeMeshDiffused::CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 	bool bUseUniformColor, XMFLOAT4 xmf4Color)
 	: CMesh(pd3dDevice, pd3dCommandList)
 {
-	m_nVertices = 8;
+	// [Claude 수정] 면 단위 평탄 음영(flat shading) 을 위해 정점을 8 개 → 24 개로 분리.
+	// 기존엔 정점 8 개가 인접한 3 면에서 공유되어 노멀이 (±1,±1,±1)/√3 대각선 방향으로
+	// 평균되었고, 픽셀 셰이더에서 보간된 노멀이 면 사이를 매끄럽게 가로지르며 음영이
+	// 둥글둥글해졌다 — 면 단위 구분이 안 됨. 이제 각 면마다 독립된 4 개 정점을 두고,
+	// 그 4 정점에 그 면의 법선(±X / ±Y / ±Z 축 단위 벡터)을 부여한다.
+	m_nVertices = 24;
 	m_nStride = sizeof(CDiffusedVertex);
 	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
 	float fx = fWidth * 0.5f, fy = fHeight * 0.5f, fz = fDepth * 0.5f;
-	
-	// 직육면체의 꼭지점 8개의 정점 데이터
-	// bUseUniformColor : true means all 8 vertices share the same uniform color;
-	// false keeps the original per-vertex random color behaviour.
-	auto VertexColor = [&]() -> XMFLOAT4 {
-		return bUseUniformColor ? xmf4Color : RANDOM_COLOR;
-	};
 
-	CDiffusedVertex pVertices[8];
-	pVertices[0] = CDiffusedVertex(XMFLOAT3(-fx, +fy, -fz), VertexColor());
-	pVertices[1] = CDiffusedVertex(XMFLOAT3(+fx, +fy, -fz), VertexColor());
-	pVertices[2] = CDiffusedVertex(XMFLOAT3(+fx, +fy, +fz), VertexColor());
-	pVertices[3] = CDiffusedVertex(XMFLOAT3(-fx, +fy, +fz), VertexColor());
-	pVertices[4] = CDiffusedVertex(XMFLOAT3(-fx, -fy, -fz), VertexColor());
-	pVertices[5] = CDiffusedVertex(XMFLOAT3(+fx, -fy, -fz), VertexColor());
-	pVertices[6] = CDiffusedVertex(XMFLOAT3(+fx, -fy, +fz), VertexColor());
-	pVertices[7] = CDiffusedVertex(XMFLOAT3(-fx, -fy, +fz), VertexColor());
+	// bUseUniformColor=false 일 때 RANDOM_COLOR 의 정점별 색상 분포를 보존하기 위해
+	// 원본 8 코너의 색을 한 번씩만 미리 만들어두고, 분리된 24 정점에 위치별로 매핑한다.
+	XMFLOAT4 cornerColor[8];
+	for (int i = 0; i < 8; ++i) cornerColor[i] = bUseUniformColor ? xmf4Color : RANDOM_COLOR;
+
+	// 원본 코너 좌표 (인덱스 매핑 주석용)
+	//   0:(-fx,+fy,-fz) 1:(+fx,+fy,-fz) 2:(+fx,+fy,+fz) 3:(-fx,+fy,+fz)
+	//   4:(-fx,-fy,-fz) 5:(+fx,-fy,-fz) 6:(+fx,-fy,+fz) 7:(-fx,-fy,+fz)
+	CDiffusedVertex pVertices[24];
+	CNormalVertex   pNormals[24];
+
+	// ── 윗면 (+Y) ─ 원본 코너 0,1,2,3
+	pVertices[0] = CDiffusedVertex(XMFLOAT3(-fx, +fy, -fz), cornerColor[0]);
+	pVertices[1] = CDiffusedVertex(XMFLOAT3(+fx, +fy, -fz), cornerColor[1]);
+	pVertices[2] = CDiffusedVertex(XMFLOAT3(+fx, +fy, +fz), cornerColor[2]);
+	pVertices[3] = CDiffusedVertex(XMFLOAT3(-fx, +fy, +fz), cornerColor[3]);
+	for (int i = 0; i < 4; ++i) pNormals[i] = CNormalVertex(0.0f, +1.0f, 0.0f);
+
+	// ── -Z 면 ─ 원본 코너 0,1,5,4
+	pVertices[4] = CDiffusedVertex(XMFLOAT3(-fx, +fy, -fz), cornerColor[0]);
+	pVertices[5] = CDiffusedVertex(XMFLOAT3(+fx, +fy, -fz), cornerColor[1]);
+	pVertices[6] = CDiffusedVertex(XMFLOAT3(+fx, -fy, -fz), cornerColor[5]);
+	pVertices[7] = CDiffusedVertex(XMFLOAT3(-fx, -fy, -fz), cornerColor[4]);
+	for (int i = 4; i < 8; ++i) pNormals[i] = CNormalVertex(0.0f, 0.0f, -1.0f);
+
+	// ── -X 면 ─ 원본 코너 0,3,7,4
+	pVertices[8]  = CDiffusedVertex(XMFLOAT3(-fx, +fy, -fz), cornerColor[0]);
+	pVertices[9]  = CDiffusedVertex(XMFLOAT3(-fx, +fy, +fz), cornerColor[3]);
+	pVertices[10] = CDiffusedVertex(XMFLOAT3(-fx, -fy, +fz), cornerColor[7]);
+	pVertices[11] = CDiffusedVertex(XMFLOAT3(-fx, -fy, -fz), cornerColor[4]);
+	for (int i = 8; i < 12; ++i) pNormals[i] = CNormalVertex(-1.0f, 0.0f, 0.0f);
+
+	// ── +X 면 ─ 원본 코너 1,2,6,5
+	pVertices[12] = CDiffusedVertex(XMFLOAT3(+fx, +fy, -fz), cornerColor[1]);
+	pVertices[13] = CDiffusedVertex(XMFLOAT3(+fx, +fy, +fz), cornerColor[2]);
+	pVertices[14] = CDiffusedVertex(XMFLOAT3(+fx, -fy, +fz), cornerColor[6]);
+	pVertices[15] = CDiffusedVertex(XMFLOAT3(+fx, -fy, -fz), cornerColor[5]);
+	for (int i = 12; i < 16; ++i) pNormals[i] = CNormalVertex(+1.0f, 0.0f, 0.0f);
+
+	// ── +Z 면 ─ 원본 코너 3,2,6,7
+	pVertices[16] = CDiffusedVertex(XMFLOAT3(-fx, +fy, +fz), cornerColor[3]);
+	pVertices[17] = CDiffusedVertex(XMFLOAT3(+fx, +fy, +fz), cornerColor[2]);
+	pVertices[18] = CDiffusedVertex(XMFLOAT3(+fx, -fy, +fz), cornerColor[6]);
+	pVertices[19] = CDiffusedVertex(XMFLOAT3(-fx, -fy, +fz), cornerColor[7]);
+	for (int i = 16; i < 20; ++i) pNormals[i] = CNormalVertex(0.0f, 0.0f, +1.0f);
+
+	// ── -Y 면 (바닥) ─ 원본 코너 4,5,6,7
+	pVertices[20] = CDiffusedVertex(XMFLOAT3(-fx, -fy, -fz), cornerColor[4]);
+	pVertices[21] = CDiffusedVertex(XMFLOAT3(+fx, -fy, -fz), cornerColor[5]);
+	pVertices[22] = CDiffusedVertex(XMFLOAT3(+fx, -fy, +fz), cornerColor[6]);
+	pVertices[23] = CDiffusedVertex(XMFLOAT3(-fx, -fy, +fz), cornerColor[7]);
+	for (int i = 20; i < 24; ++i) pNormals[i] = CNormalVertex(0.0f, -1.0f, 0.0f);
 
 	m_pd3dVertexBuffer = ::CreateBufferResource(
 		pd3dDevice,
@@ -133,35 +174,25 @@ CCubeMeshDiffused::CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 	/*
 	인덱스 버퍼는 6개 면에 대한 기하 정보를 가짐.
 	삼각형 리스트로 직육면체를 표현하므로 각 면마다 2개의 삼각형,
-	즉 36개의 인덱스를 가짐(6 * 2 * 3)
+	즉 36개의 인덱스를 가짐(6 * 2 * 3).
+	각 면 4 정점을 별도 슬롯으로 사용하므로 인덱스는 새로운 24 정점 인덱싱을 사용.
+	winding order(시계방향=front, FrontCounterClockwise=FALSE) 는 기존과 동일하게 보존.
 	*/
 	m_nIndices = 36;
 
 	UINT pnIndices[36] = {
-		// 앞면(Front) 사각형의 위쪽 삼각형
-		3, 1, 0,
-		// 앞면(Front) 사각형의 아래쪽 삼각형
-		2, 1, 3,
-		// 윗면(Top) 사각형의 위쪽 삼각형
-		0, 5, 4,
-		// 윗면(Top) 사각형의 아래쪽 삼각형
-		1, 5, 0,
-		// 뒷면(Back) 사각형의 위쪽 삼각형
-		3, 4, 7,
-		// 뒷면(Back) 사각형의 아래쪽 삼각형
-		0, 4, 3,
-		// 아래면(Bottom) 사각형의 위쪽 삼각형
-		1, 6, 5,
-		// 아래면(Bottom) 사각형의 아래쪽 삼각형
-		2, 6, 1,
-		// 옆면(Left) 사각형의 위쪽 삼각형
-		2, 7, 6,
-		// 옆면(Left) 사각형의 아래쪽 삼각형
-		3, 7, 2,
-		// 옆면(Right) 사각형의 위쪽 삼각형
-		6, 4, 5,
-		// 옆면(Right) 사각형의 아래쪽 삼각형
-		7, 4, 6
+		// 윗면(+Y): 새 정점 0..3 — 원본 (3,1,0)/(2,1,3) 매핑 유지
+		3, 1, 0,   2, 1, 3,
+		// -Z 면: 새 정점 4..7 — 원본 (0,5,4)/(1,5,0) → (4,6,7)/(5,6,4)
+		4, 6, 7,   5, 6, 4,
+		// -X 면: 새 정점 8..11 — 원본 (3,4,7)/(0,4,3) → (9,11,10)/(8,11,9)
+		9, 11, 10, 8, 11, 9,
+		// +X 면: 새 정점 12..15 — 원본 (1,6,5)/(2,6,1) → (12,14,15)/(13,14,12)
+		12, 14, 15, 13, 14, 12,
+		// +Z 면: 새 정점 16..19 — 원본 (2,7,6)/(3,7,2) → (17,19,18)/(16,19,17)
+		17, 19, 18, 16, 19, 17,
+		// -Y 면(바닥): 새 정점 20..23 — 원본 (6,4,5)/(7,4,6) → (22,20,21)/(23,20,22)
+		22, 20, 21, 23, 20, 22,
 	};
 
 	// 인덱스 버퍼를 생성한다
@@ -179,31 +210,18 @@ CCubeMeshDiffused::CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCom
 	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
 
-	// 노멀 병렬 버퍼 생성 (slot 1).
-	// 8 정점 큐브에서 각 정점의 노멀은 인접 면 평균 = 큐브 중심에서 정점 위치로 향하는
-	// 단위 벡터로 계산한다. 결과적으로 (+-1, +-1, +-1)/sqrt(3) 으로 정규화된 8 개 노멀.
-	CNormalVertex pNormals[8];
-	const float kInvSqrt3 = 1.0f / sqrtf(3.0f);
-	pNormals[0] = CNormalVertex(-kInvSqrt3, +kInvSqrt3, -kInvSqrt3);
-	pNormals[1] = CNormalVertex(+kInvSqrt3, +kInvSqrt3, -kInvSqrt3);
-	pNormals[2] = CNormalVertex(+kInvSqrt3, +kInvSqrt3, +kInvSqrt3);
-	pNormals[3] = CNormalVertex(-kInvSqrt3, +kInvSqrt3, +kInvSqrt3);
-	pNormals[4] = CNormalVertex(-kInvSqrt3, -kInvSqrt3, -kInvSqrt3);
-	pNormals[5] = CNormalVertex(+kInvSqrt3, -kInvSqrt3, -kInvSqrt3);
-	pNormals[6] = CNormalVertex(+kInvSqrt3, -kInvSqrt3, +kInvSqrt3);
-	pNormals[7] = CNormalVertex(-kInvSqrt3, -kInvSqrt3, +kInvSqrt3);
-
+	// 노멀 병렬 버퍼 생성 (slot 1). 24 정점 전부 위에서 면별로 설정 완료.
 	const UINT normalStride = sizeof(CNormalVertex);
 	m_pd3dNormalBuffer = ::CreateBufferResource(
 		pd3dDevice, pd3dCommandList,
-		pNormals, normalStride * 8,
+		pNormals, normalStride * m_nVertices,
 		D3D12_HEAP_TYPE_DEFAULT,
 		D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
 		&m_pd3dNormalUploadBuffer);
 
 	m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
 	m_d3dNormalBufferView.StrideInBytes  = normalStride;
-	m_d3dNormalBufferView.SizeInBytes    = normalStride * 8;
+	m_d3dNormalBufferView.SizeInBytes    = normalStride * m_nVertices;
 	m_bHasNormals = true;
 }
 
@@ -215,9 +233,10 @@ CCubeMeshDiffused::~CCubeMeshDiffused()
 // ====================================================================================
 // [Claude] CMergedCubeMesh — 다수 직육면체를 단일 메시로 통합
 // ====================================================================================
-// 각 큐브의 8개 정점을 미리 월드 좌표로 변환해 단일 정점/인덱스/노멀 버퍼로 합친다.
-// N 개의 큐브 = 8N 정점 + 36N 인덱스 + 8N 노멀, 단 1 회의 DrawIndexedInstanced 로 렌더.
-// 노멀은 큐브 중심에서 정점 위치로 향하는 단위 벡터 (각 정점마다 (±1,±1,±1)/sqrt(3)).
+// 각 큐브의 정점을 미리 월드 좌표로 변환해 단일 정점/인덱스/노멀 버퍼로 합친다.
+// [Claude 수정] 면 단위 평탄 음영을 위해 큐브당 정점을 8 → 24 로 분리. 각 면의 4 정점은
+//   동일한 위치를 공유하지만 노멀이 그 면의 축 법선(±X / ±Y / ±Z) 으로 고정된다.
+//   N 개의 큐브 = 24N 정점 + 36N 인덱스 + 24N 노멀, 단 1 회의 DrawIndexedInstanced 로 렌더.
 CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	const std::vector<Cube>& cubes)
 	: CMesh(pd3dDevice, pd3dCommandList)
@@ -226,7 +245,7 @@ CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	m_d3dPrimitiveTopology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
 	const size_t nCubes = cubes.size();
-	m_nVertices = static_cast<UINT>(nCubes * 8);
+	m_nVertices = static_cast<UINT>(nCubes * 24);
 	m_nIndices  = static_cast<UINT>(nCubes * 36);
 
 	if (nCubes == 0) {
@@ -236,27 +255,37 @@ CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 		return;
 	}
 
-	// 큐브 인덱스 패턴 (CCubeMeshDiffused 와 동일). 정점 8 개 단위 오프셋만 더하면 된다.
+	// 큐브당 24 정점 인덱스 패턴 (CCubeMeshDiffused 의 새 인덱스와 동일). 면별 4 정점이
+	// 분리되어 있으므로 새 인덱싱(0..23) 을 사용하고, 큐브 i 의 정점 베이스는 i*24.
 	const UINT kBaseIndices[36] = {
-		3, 1, 0,   2, 1, 3,   // 앞면(Front)
-		0, 5, 4,   1, 5, 0,   // 윗면(Top)
-		3, 4, 7,   0, 4, 3,   // 뒷면(Back)
-		1, 6, 5,   2, 6, 1,   // 아래면(Bottom)
-		2, 7, 6,   3, 7, 2,   // 옆면(Left)
-		6, 4, 5,   7, 4, 6    // 옆면(Right)
+		// 윗면(+Y): 0..3
+		3, 1, 0,   2, 1, 3,
+		// -Z 면: 4..7
+		4, 6, 7,   5, 6, 4,
+		// -X 면: 8..11
+		9, 11, 10, 8, 11, 9,
+		// +X 면: 12..15
+		12, 14, 15, 13, 14, 12,
+		// +Z 면: 16..19
+		17, 19, 18, 16, 19, 17,
+		// -Y 면(바닥): 20..23
+		22, 20, 21, 23, 20, 22,
 	};
 
-	// 노멀: 큐브 중심 → 정점 방향 단위 벡터. CCubeMeshDiffused 와 동일.
-	const float kInvSqrt3 = 1.0f / sqrtf(3.0f);
-	const XMFLOAT3 kBaseNormals[8] = {
-		{ -kInvSqrt3, +kInvSqrt3, -kInvSqrt3 },
-		{ +kInvSqrt3, +kInvSqrt3, -kInvSqrt3 },
-		{ +kInvSqrt3, +kInvSqrt3, +kInvSqrt3 },
-		{ -kInvSqrt3, +kInvSqrt3, +kInvSqrt3 },
-		{ -kInvSqrt3, -kInvSqrt3, -kInvSqrt3 },
-		{ +kInvSqrt3, -kInvSqrt3, -kInvSqrt3 },
-		{ +kInvSqrt3, -kInvSqrt3, +kInvSqrt3 },
-		{ -kInvSqrt3, -kInvSqrt3, +kInvSqrt3 },
+	// 큐브당 24 정점의 노멀. 각 면의 4 정점은 동일한 면 법선을 공유한다.
+	const XMFLOAT3 kBaseNormals[24] = {
+		// 윗면(+Y) — 4 정점
+		{ 0.0f, +1.0f,  0.0f }, { 0.0f, +1.0f,  0.0f }, { 0.0f, +1.0f,  0.0f }, { 0.0f, +1.0f,  0.0f },
+		// -Z 면
+		{ 0.0f,  0.0f, -1.0f }, { 0.0f,  0.0f, -1.0f }, { 0.0f,  0.0f, -1.0f }, { 0.0f,  0.0f, -1.0f },
+		// -X 면
+		{-1.0f,  0.0f,  0.0f }, {-1.0f,  0.0f,  0.0f }, {-1.0f,  0.0f,  0.0f }, {-1.0f,  0.0f,  0.0f },
+		// +X 면
+		{+1.0f,  0.0f,  0.0f }, {+1.0f,  0.0f,  0.0f }, {+1.0f,  0.0f,  0.0f }, {+1.0f,  0.0f,  0.0f },
+		// +Z 면
+		{ 0.0f,  0.0f, +1.0f }, { 0.0f,  0.0f, +1.0f }, { 0.0f,  0.0f, +1.0f }, { 0.0f,  0.0f, +1.0f },
+		// -Y 면(바닥)
+		{ 0.0f, -1.0f,  0.0f }, { 0.0f, -1.0f,  0.0f }, { 0.0f, -1.0f,  0.0f }, { 0.0f, -1.0f,  0.0f },
 	};
 
 	std::vector<CDiffusedVertex> vertices;
@@ -275,19 +304,50 @@ CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 		const float cy = c.center.y;
 		const float cz = c.center.z;
 
-		// 8 개 정점을 월드 좌표로 직접 저장. world 행렬은 호출부에서 identity 사용.
-		vertices.emplace_back(XMFLOAT3(cx - fx, cy + fy, cz - fz), c.color);
-		vertices.emplace_back(XMFLOAT3(cx + fx, cy + fy, cz - fz), c.color);
-		vertices.emplace_back(XMFLOAT3(cx + fx, cy + fy, cz + fz), c.color);
-		vertices.emplace_back(XMFLOAT3(cx - fx, cy + fy, cz + fz), c.color);
-		vertices.emplace_back(XMFLOAT3(cx - fx, cy - fy, cz - fz), c.color);
-		vertices.emplace_back(XMFLOAT3(cx + fx, cy - fy, cz - fz), c.color);
-		vertices.emplace_back(XMFLOAT3(cx + fx, cy - fy, cz + fz), c.color);
-		vertices.emplace_back(XMFLOAT3(cx - fx, cy - fy, cz + fz), c.color);
+		// 원본 8 코너 좌표를 미리 계산해 24 정점 슬롯에 매핑한다.
+		const XMFLOAT3 P0(cx - fx, cy + fy, cz - fz);  // 좌상앞
+		const XMFLOAT3 P1(cx + fx, cy + fy, cz - fz);  // 우상앞
+		const XMFLOAT3 P2(cx + fx, cy + fy, cz + fz);  // 우상뒤
+		const XMFLOAT3 P3(cx - fx, cy + fy, cz + fz);  // 좌상뒤
+		const XMFLOAT3 P4(cx - fx, cy - fy, cz - fz);  // 좌하앞
+		const XMFLOAT3 P5(cx + fx, cy - fy, cz - fz);  // 우하앞
+		const XMFLOAT3 P6(cx + fx, cy - fy, cz + fz);  // 우하뒤
+		const XMFLOAT3 P7(cx - fx, cy - fy, cz + fz);  // 좌하뒤
 
-		for (int j = 0; j < 8; ++j) normals.emplace_back(kBaseNormals[j]);
+		// 윗면(+Y) — 코너 0,1,2,3
+		vertices.emplace_back(P0, c.color);
+		vertices.emplace_back(P1, c.color);
+		vertices.emplace_back(P2, c.color);
+		vertices.emplace_back(P3, c.color);
+		// -Z 면 — 코너 0,1,5,4
+		vertices.emplace_back(P0, c.color);
+		vertices.emplace_back(P1, c.color);
+		vertices.emplace_back(P5, c.color);
+		vertices.emplace_back(P4, c.color);
+		// -X 면 — 코너 0,3,7,4
+		vertices.emplace_back(P0, c.color);
+		vertices.emplace_back(P3, c.color);
+		vertices.emplace_back(P7, c.color);
+		vertices.emplace_back(P4, c.color);
+		// +X 면 — 코너 1,2,6,5
+		vertices.emplace_back(P1, c.color);
+		vertices.emplace_back(P2, c.color);
+		vertices.emplace_back(P6, c.color);
+		vertices.emplace_back(P5, c.color);
+		// +Z 면 — 코너 3,2,6,7
+		vertices.emplace_back(P3, c.color);
+		vertices.emplace_back(P2, c.color);
+		vertices.emplace_back(P6, c.color);
+		vertices.emplace_back(P7, c.color);
+		// -Y 면(바닥) — 코너 4,5,6,7
+		vertices.emplace_back(P4, c.color);
+		vertices.emplace_back(P5, c.color);
+		vertices.emplace_back(P6, c.color);
+		vertices.emplace_back(P7, c.color);
 
-		const UINT base = static_cast<UINT>(i * 8);
+		for (int j = 0; j < 24; ++j) normals.emplace_back(kBaseNormals[j]);
+
+		const UINT base = static_cast<UINT>(i * 24);
 		for (int j = 0; j < 36; ++j) indices.push_back(kBaseIndices[j] + base);
 	}
 
