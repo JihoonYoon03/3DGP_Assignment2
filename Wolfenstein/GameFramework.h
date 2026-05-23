@@ -204,7 +204,7 @@ private:
 	static constexpr float kRecoilDuration = 0.25f;
 
 	// === 적 잔여 수 점 카운트(좌상단) ===
-	// SpawnEnemiesForMap 이 만드는 최대 적 수(10) 만큼 점을 미리 생성하고
+	// SpawnEnemiesForMap 이 만드는 최대 적 수(12) 만큼 점을 미리 생성하고
 	// 살아있는 적 수만큼만 앞에서부터 그린다. 라이프 바와 동일한 패턴.
 	std::vector<std::shared_ptr<CGameObject>> m_pCountPips;
 

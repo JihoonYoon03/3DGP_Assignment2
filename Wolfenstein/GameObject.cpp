@@ -598,8 +598,10 @@ void CEnemyObject::Animate(float fTimeElapsed)
 			}
 
 			// 발사 쿨다운이 끝나면 총알 발사. muzzle 은 소총 총구(없으면 가슴 높이 폴백)에서
-			// 출발하지만, 총알 방향은 항상 muzzle → 플레이어 중심으로 재계산해 오프셋 때문에
-			// 비껴 지나가지 않게 한다.
+			// 출발하지만, 총알 방향은 항상 muzzle → 플레이어 몸통 중앙으로 재계산해 오프셋 때문에
+			// 비껴 지나가지 않게 한다. playerPos.y 는 시점(MAP_EYE_HEIGHT) 이지만 모델 AABB
+			// 는 그 아래(중심 Y = playerPos.y - MAP_EYE_HEIGHT + 1.3) 에 있으므로 머리 위로
+			// 빗나가지 않도록 몸통 중앙 Y 를 목표로 삼는다.
 			if (m_fFireCooldown <= 0.0f && m_fnFire) {
 				XMFLOAT3 muzzle;
 				if (m_pRifle) {
@@ -617,8 +619,9 @@ void CEnemyObject::Animate(float fTimeElapsed)
 						myPos.y + 0.2f,
 						myPos.z + dir.z * 0.8f };
 				}
+				const float kPlayerBodyCenterY = playerPos.y - MAP_EYE_HEIGHT + 1.3f;
 				XMFLOAT3 fireDir{ playerPos.x - muzzle.x,
-				                  playerPos.y - muzzle.y,
+				                  kPlayerBodyCenterY - muzzle.y,
 				                  playerPos.z - muzzle.z };
 				const float fl = sqrtf(fireDir.x * fireDir.x + fireDir.y * fireDir.y + fireDir.z * fireDir.z);
 				if (fl > 1e-5f) { fireDir.x /= fl; fireDir.y /= fl; fireDir.z /= fl; }

@@ -436,7 +436,7 @@ void CGameFramework::BuildObjects()
 		m_pLifeBarSegments.push_back(std::move(pSegObj));
 	}
 
-	// 적 잔여 수 점 카운트 (좌상단). 최대 적 수 10 만큼 미리 생성하고 살아있는 적
+	// 적 잔여 수 점 카운트 (좌상단). 최대 적 수 12 만큼 미리 생성하고 살아있는 적
 	// 수만큼만 앞에서부터 그린다. CHudQuadMesh 로 NDC 좌표를 직접 지정.
 	{
 		const float kPipSizePx = 14.0f;
@@ -454,8 +454,8 @@ void CGameFramework::BuildObjects()
 		const float yT     =  1.0f - topNdc;
 		const float yB     =  yT - pipNdcH;
 
-		m_pCountPips.reserve(10);
-		for (int i = 0; i < 10; ++i) {
+		m_pCountPips.reserve(12);
+		for (int i = 0; i < 12; ++i) {
 			const float xL = xLBase + float(i) * (pipNdcW + gapNdc);
 			const float xR = xL + pipNdcW;
 			auto pPipMesh = std::make_shared<CHudQuadMesh>(
