@@ -367,7 +367,7 @@ void CGameFramework::BuildObjects()
 	XMStoreFloat4x4(&m16Xform,
 		XMMatrixTranslation(1.815f, -0.17f, 0.0f) *
 		XMMatrixRotationY(+XM_PIDIV2) *
-		XMMatrixScaling(0.122f, 0.122f, 0.122f));
+		XMMatrixScaling(0.242f, 0.242f, 0.242f));
 	m_pRifleMesh = std::make_shared<CObjMesh>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		L"../Resources/M16.obj",
