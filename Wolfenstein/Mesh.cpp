@@ -417,7 +417,7 @@ bool EqualsIgnoreCase(const std::string& a, const char* b) {
 // (대소문자 무시) — Blender export 의 o 그룹 이름과 매칭한다.
 XMFLOAT4 ResolveGunPartColor(const std::string& sName, XMFLOAT4 fallback) {
 	// 나무 개머리판
-	if (EqualsIgnoreCase(sName, "Stock"))        return XMFLOAT4(0.35f, 0.22f, 0.12f, 1.0f);
+	if (EqualsIgnoreCase(sName, "Stock"))        return XMFLOAT4(0.10f, 0.08f, 0.08f, 1.0f);
 	// 짙은 메탈 매거진
 	if (EqualsIgnoreCase(sName, "Mag"))          return XMFLOAT4(0.12f, 0.12f, 0.13f, 1.0f);
 	if (EqualsIgnoreCase(sName, "Magazine"))     return XMFLOAT4(0.12f, 0.12f, 0.13f, 1.0f);
