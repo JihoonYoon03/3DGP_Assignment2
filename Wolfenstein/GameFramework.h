@@ -219,4 +219,14 @@ private:
 	// -1.0f 는 비활성 상태.
 	std::vector<std::shared_ptr<CGameObject>> m_pWinLetters;
 	float m_fVictoryTimer = -1.0f;
+
+	// === 피격 비네트 오버레이 ===
+	// 적 총알 명중 시 화면 외곽이 잠시 빨갛게 깜빡인다.
+	// m_fHitFlash: 피격 시 1.0 으로 설정되고 매 프레임 kHitFlashDecayRate 비율로 감쇠.
+	// m_pHitOverlayShader: NDC 풀스크린 + alpha blend PSO. 한 번만 생성.
+	// m_pHitOverlayQuad: NDC (-1,1)~(1,-1) 풀스크린 쿼드 GameObject. m_fHitFlash > 0 일 때만 렌더.
+	float m_fHitFlash = 0.0f;
+	static constexpr float kHitFlashDecayRate = 1.7f; // 1.0 → 0 까지 약 0.6초
+	std::shared_ptr<CShader>     m_pHitOverlayShader;
+	std::shared_ptr<CGameObject> m_pHitOverlayQuad;
 };

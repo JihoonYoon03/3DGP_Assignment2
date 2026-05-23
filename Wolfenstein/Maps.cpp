@@ -410,14 +410,14 @@ namespace {
 	// �� 1 (30x30) - �õ� 1 �� ������ �̷�.
 	const std::vector<std::string>& Map1Grid()
 	{
-		static const std::vector<std::string> grid = GenerateMaze(30, 30, 1u);
+		static const std::vector<std::string> grid = GenerateMaze(36, 36, 1u);
 		return grid;
 	}
 
-	// �� 2 (30x30) - �ٸ� �õ�(2) �� ������ ���� ������ �̷�.
+	// �� 2 (36x36) - �ٸ� �õ�(2) �� ������ ���� ������ �̷�.
 	const std::vector<std::string>& Map2Grid()
 	{
-		static const std::vector<std::string> grid = GenerateMaze(30, 30, 2u);
+		static const std::vector<std::string> grid = GenerateMaze(36, 36, 2u);
 		return grid;
 	}
 
@@ -499,20 +499,20 @@ void BuildMap2Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dC
 
 MapInfo GetMap1Info()
 {
-	// 30x30 �̷��� (��1, ��1) ���� ��ġ���� ����(+Z) ������ �ٶ󺻴�.
-	// halfX = halfZ = (30-1) * TILE * 0.5 = 58
+	// 36x36 �̷��� (��1, ��1) ���� ��ġ���� ����(+Z) ������ �ٶ󺻴�.
+	// halfX = halfZ = (36-1) * TILE * 0.5 = 70
 	MapInfo info;
-	info.cameraPosition = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 58.0f);
-	info.cameraLookAt   = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT - 0.2f, 3.0f * TILE - 58.0f);
+	info.cameraPosition = XMFLOAT3(1.0f * TILE - 70.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 70.0f);
+	info.cameraLookAt   = XMFLOAT3(1.0f * TILE - 70.0f, MAP_EYE_HEIGHT - 0.2f, 3.0f * TILE - 70.0f);
 	return info;
 }
 
 MapInfo GetMap2Info()
 {
-	// 30x30 �̷��� ���� ��ġ���� ����(+X)�� ����. �ٸ� �õ�� ������� �̷����� ������ ��ǥ ü��.
+	// 36x36 �̷��� ���� ��ġ���� ����(+X)�� ����. �ٸ� �õ�� ������� �̷����� ������ ��ǥ ü��.
 	MapInfo info;
-	info.cameraPosition = XMFLOAT3(1.0f * TILE - 58.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 58.0f);
-	info.cameraLookAt   = XMFLOAT3(3.0f * TILE - 58.0f, MAP_EYE_HEIGHT - 0.2f, 1.0f * TILE - 58.0f);
+	info.cameraPosition = XMFLOAT3(1.0f * TILE - 70.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 70.0f);
+	info.cameraLookAt   = XMFLOAT3(3.0f * TILE - 70.0f, MAP_EYE_HEIGHT - 0.2f, 1.0f * TILE - 70.0f);
 	return info;
 }
 // ===================== 충돌 처리 =====================

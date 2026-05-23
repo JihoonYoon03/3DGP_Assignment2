@@ -80,6 +80,26 @@ public:
 	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature);
 };
 
+// 화면 외곽 피격 비네트 오버레이. CHudShader 와 동일한 NDC 직출력 골격에
+// 알파 블렌딩만 켜진 PSO. cbScreenFx(b3) 의 gHitFlash 가 알파 강도를 결정.
+// 피격 직후 m_fHitFlash > 0 일 때만 풀스크린 쿼드 1번 드로우.
+class CHitOverlayShader : public CShader
+{
+public:
+	CHitOverlayShader();
+	virtual ~CHitOverlayShader();
+
+	virtual D3D12_INPUT_LAYOUT_DESC CreateInputLayout();
+	virtual D3D12_RASTERIZER_DESC CreateRasterizerState();
+	virtual D3D12_BLEND_DESC CreateBlendState();
+	virtual D3D12_DEPTH_STENCIL_DESC CreateDepthStencilState();
+
+	virtual D3D12_SHADER_BYTECODE CreateVertexShader(ID3DBlob** ppd3dShaderBlob);
+	virtual D3D12_SHADER_BYTECODE CreatePixelShader(ID3DBlob** ppd3dShaderBlob);
+
+	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature);
+};
+
 class CObjectsShader : public CShader
 {
 public:

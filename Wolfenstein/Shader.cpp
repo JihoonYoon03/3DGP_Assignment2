@@ -321,6 +321,98 @@ void CHudShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3
 
 
 // ====================================================================================
+// CHitOverlayShader : 피격 비네트 오버레이 (NDC 풀스크린 쿼드 + alpha blend)
+// ====================================================================================
+CHitOverlayShader::CHitOverlayShader()
+{
+}
+
+CHitOverlayShader::~CHitOverlayShader()
+{
+}
+
+D3D12_INPUT_LAYOUT_DESC CHitOverlayShader::CreateInputLayout()
+{
+	// CHudShader 와 동일한 (POSITION + COLOR) 레이아웃 — COLOR 는 미사용이지만
+	// VS_HUD_INPUT 구조체를 재사용해 컴파일 호환성을 유지한다.
+	UINT nInputElementDescs = 2;
+	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
+	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	pd3dInputElementDescs[1] = { "COLOR",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	D3D12_INPUT_LAYOUT_DESC d3dInputLayoutDesc;
+	d3dInputLayoutDesc.pInputElementDescs = pd3dInputElementDescs;
+	d3dInputLayoutDesc.NumElements = nInputElementDescs;
+	return d3dInputLayoutDesc;
+}
+
+D3D12_RASTERIZER_DESC CHitOverlayShader::CreateRasterizerState()
+{
+	D3D12_RASTERIZER_DESC d3dRasterizerDesc;
+	::ZeroMemory(&d3dRasterizerDesc, sizeof(D3D12_RASTERIZER_DESC));
+	d3dRasterizerDesc.FillMode = D3D12_FILL_MODE_SOLID;
+	d3dRasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+	d3dRasterizerDesc.FrontCounterClockwise = FALSE;
+	d3dRasterizerDesc.DepthClipEnable = TRUE;
+	return d3dRasterizerDesc;
+}
+
+D3D12_BLEND_DESC CHitOverlayShader::CreateBlendState()
+{
+	// SrcAlpha + (1-SrcAlpha) 표준 알파 블렌딩 — 외곽 빨강이 기존 화면 위에 덧칠된다.
+	D3D12_BLEND_DESC d3dBlendDesc;
+	::ZeroMemory(&d3dBlendDesc, sizeof(D3D12_BLEND_DESC));
+	d3dBlendDesc.AlphaToCoverageEnable = FALSE;
+	d3dBlendDesc.IndependentBlendEnable = FALSE;
+	d3dBlendDesc.RenderTarget[0].BlendEnable = TRUE;
+	d3dBlendDesc.RenderTarget[0].LogicOpEnable = FALSE;
+	d3dBlendDesc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	d3dBlendDesc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	d3dBlendDesc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	d3dBlendDesc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	d3dBlendDesc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	d3dBlendDesc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	d3dBlendDesc.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+	d3dBlendDesc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	return d3dBlendDesc;
+}
+
+D3D12_DEPTH_STENCIL_DESC CHitOverlayShader::CreateDepthStencilState()
+{
+	// HUD 와 동일하게 깊이 테스트/쓰기 OFF — 항상 화면 최상단에 덧칠된다.
+	D3D12_DEPTH_STENCIL_DESC d3dDepthStencilDesc;
+	::ZeroMemory(&d3dDepthStencilDesc, sizeof(D3D12_DEPTH_STENCIL_DESC));
+	d3dDepthStencilDesc.DepthEnable = FALSE;
+	d3dDepthStencilDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	d3dDepthStencilDesc.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	d3dDepthStencilDesc.StencilEnable = FALSE;
+	d3dDepthStencilDesc.StencilReadMask = 0x00;
+	d3dDepthStencilDesc.StencilWriteMask = 0x00;
+	d3dDepthStencilDesc.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	d3dDepthStencilDesc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+	d3dDepthStencilDesc.BackFace = d3dDepthStencilDesc.FrontFace;
+	return d3dDepthStencilDesc;
+}
+
+D3D12_SHADER_BYTECODE CHitOverlayShader::CreateVertexShader(ID3DBlob** ppd3dShaderBlob)
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "VSHitOverlay", "vs_5_1", ppd3dShaderBlob);
+}
+
+D3D12_SHADER_BYTECODE CHitOverlayShader::CreatePixelShader(ID3DBlob** ppd3dShaderBlob)
+{
+	return CShader::CompileShaderFromFile(L"Shaders.hlsl", "PSHitOverlay", "ps_5_1", ppd3dShaderBlob);
+}
+
+void CHitOverlayShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature)
+{
+	m_vd3dPipelineStates.resize(1);
+	CShader::CreateShader(pd3dDevice, pd3dGraphicsRootSignature);
+}
+
+
+// ====================================================================================
 // ====================================================================================
 CObjectsShader::CObjectsShader()
 {
