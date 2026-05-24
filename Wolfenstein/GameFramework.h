@@ -190,6 +190,15 @@ private:
 	std::vector<std::shared_ptr<CGameObject>> m_pLifeBarSegments;
 	bool m_bResetPending = false;
 
+	// [Claude] 플레이어 사망 시퀀스.
+	// m_fPlayerDeathTimer 는 -1.0f 일 때 비활성. HP 가 0 으로 떨어지면
+	// kPlayerDeathDuration 으로 설정되어 매 프레임 감산되고, 그동안 입력은
+	// 차단되고 카메라가 앞으로 천천히 기울며 화면이 붉게 유지된다. 0 도달 시
+	// m_bResetPending 을 true 로 세팅하여 기존 reset 로직으로 LANDING 복귀.
+	float m_fPlayerDeathTimer = -1.0f;
+	static constexpr float kPlayerDeathDuration  = 1.5f;
+	static constexpr float kPlayerDeathPitchRate = -0.7f; // rad/s (~-40°/s → 1.5초간 약 -60°)
+
 	// === 소총 메시 ===
 	// 플레이어 소총 객체 자체는 m_pPlayer->GetRifle() 로 접근.
 	// 적 소총은 적 1체당 1개의 CGameObject 가 이 메시를 공유 (CEnemyObject::m_pRifle).
