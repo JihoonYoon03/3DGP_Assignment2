@@ -387,6 +387,17 @@ void CCharacter::TickJumpCooldown(float fTimeElapsed)
 // ==========================================================================
 // CEnemyObject
 // ==========================================================================
+namespace {
+	// [Claude] 적 사망 애니메이션 타이밍/형상 상수.
+	// 정지 0.2초 후 0.8초 동안 forward 축 기준 90° 옆으로 회전. 회전 완료 시
+	// AABB half (0.6, 1.3, 0.6) 의 수직 half 가 1.3 → 0.6 으로 줄어드므로
+	// 부유 방지를 위해 Y 를 0.7 만큼 lerp 로 하강시킨다.
+	constexpr float kEnemyDeathPauseDuration = 0.2f;
+	constexpr float kEnemyDeathTipDuration   = 0.8f;
+	constexpr float kEnemyDeathTotalDuration = kEnemyDeathPauseDuration + kEnemyDeathTipDuration;
+	constexpr float kEnemyDeathYDrop         = 0.7f;
+}
+
 CEnemyObject::CEnemyObject(SceneState eSceneState, unsigned int nSeed)
 	: m_eAIState(EEnemyAIState::Idle_Pause)
 	, m_fStateTimer(0.0f)
@@ -473,6 +484,46 @@ XMFLOAT3 CEnemyObject::BestFreeDirectionToward(const XMFLOAT3& towardsDir)
 void CEnemyObject::Animate(float fTimeElapsed)
 {
 	if (!m_bAlive) return;
+
+	// [Claude] 사망 애니메이션 — AI/이동/사격/소총/마커 동기화 모두 스킵하고
+	// 베이스 월드행렬에 사망 시점 forward 축 기준 회전을 적용한다. 0.2초 정지
+	// 구간 후 0.8초간 0°→90° 보간, 동시에 Y 도 0→-0.7 만큼 lerp 하여 바닥에
+	// 자연스럽게 안착시킨다. 만료 시 Kill() 로 PruneDead 회수.
+	if (IsDying()) {
+		m_fDeathTimer -= fTimeElapsed;
+
+		// 회전 진행률 (0=시작/정지구간, 1=완전히 누움).
+		float tipNormalized;
+		if (m_fDeathTimer > kEnemyDeathTipDuration) {
+			tipNormalized = 0.0f;  // 아직 정지 구간
+		}
+		else if (m_fDeathTimer > 0.0f) {
+			tipNormalized = 1.0f - (m_fDeathTimer / kEnemyDeathTipDuration);
+		}
+		else {
+			tipNormalized = 1.0f;
+		}
+
+		// 사망 시점 월드행렬에 forward 축 회전 적용 (translation 분리 후 재결합).
+		const float angleRad = XMConvertToRadians(90.0f) * tipNormalized;
+		XMVECTOR vAxis = XMLoadFloat3(&m_xmf3DeathTipAxis);
+		XMMATRIX matRot  = XMMatrixRotationAxis(vAxis, angleRad);
+		XMMATRIX matBase = XMLoadFloat4x4(&m_xmf4x4DeathBaseWorld);
+		XMVECTOR vPos = matBase.r[3];
+		matBase.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+		XMMATRIX matFinal = XMMatrixMultiply(matBase, matRot);
+		// Y 하강 보정 + translation 복원.
+		XMFLOAT3 pos; XMStoreFloat3(&pos, vPos);
+		pos.y = m_fDeathBaseY - kEnemyDeathYDrop * tipNormalized;
+		matFinal.r[3] = XMVectorSet(pos.x, pos.y, pos.z, 1.0f);
+		XMStoreFloat4x4(&m_xmf4x4World, matFinal);
+
+		if (m_fDeathTimer <= 0.0f) {
+			Kill();   // 다음 PruneDead 에서 객체 회수
+		}
+		return;
+	}
+
 	if (!m_fnGetPlayer) return; // 콜백 주입 전이면 아무것도 하지 않음
 
 	// 1. 타이머 감산
@@ -666,10 +717,21 @@ void CEnemyObject::Animate(float fTimeElapsed)
 
 void CEnemyObject::OnHit(CGameObject* pOther)
 {
-	// Scene::AnimateObjects 의 충돌 콜백이 b->OnHit(a) 형태로 호출한다.
-	// 플레이어 총알(a) 은 콜백 안에서 이미 Kill() 되므로 여기서는 체력만 감산.
-	// CCharacter::OnHit 가 TakeDamage(1) 로 체력 감산 + Kill 처리한다.
-	CCharacter::OnHit(pOther);
+	// [Claude] 사망 애니메이션 도입에 따라 CCharacter::OnHit 의 자동 Kill 경로를
+	// 우회한다. HP 만 직접 감산하고, 치사 시 m_bAlive 는 유지한 채 사망 타이머만
+	// 시작 — Animate 분기에서 옆으로 누운 후 만료 시점에 Kill() 호출.
+	if (IsDying()) return;            // 이미 죽는 중이면 추가 피격 무시
+	if (m_nHP > 0) m_nHP -= 1;
+	if (m_nHP <= 0) {
+		m_nHP = 0;
+		// 사망 애니메이션 시작 — Kill() 호출하지 않아 렌더/애니메이트 유지.
+		m_fDeathTimer          = kEnemyDeathTotalDuration;
+		m_xmf4x4DeathBaseWorld = m_xmf4x4World;
+		m_xmf3DeathTipAxis     = GetLook();      // 사망 시점 forward 축
+		m_fDeathBaseY          = GetPosition().y;
+		// 머리 위 마커 즉시 숨김 (사망 중인 적은 카운트/마커 대상 제외).
+		m_bMarkerVisible       = false;
+	}
 }
 
 void CEnemyObject::SetMarkerMesh(std::shared_ptr<CMesh> pMesh)

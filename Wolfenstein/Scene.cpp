@@ -172,6 +172,9 @@ void CScene::AnimateObjects(float fTimeElapsed)
 				m_vShaders[idx].GetObjects(),
 				EObjectTag::Bullet, EObjectTag::Enemy,
 				[](CGameObject* a, CGameObject* b) {
+					// [Claude] 사망 애니메이션 중인 적(IsDying)은 무적 - 총알 통과.
+					auto* pEnemy = static_cast<CEnemyObject*>(b);
+					if (pEnemy->IsDying()) return;
 					a->Kill();
 					b->OnHit(a);
 				});
@@ -224,7 +227,11 @@ int CScene::CountAliveEnemies() const
 	if (idx >= m_vShaders.size()) return 0;
 	int n = 0;
 	for (const auto& p : m_vShaders[idx].GetObjects()) {
-		if (p && p->IsAlive() && p->GetTag() == EObjectTag::Enemy) ++n;
+		if (!p || !p->IsAlive()) continue;
+		if (p->GetTag() != EObjectTag::Enemy) continue;
+		// [Claude] 사망 애니메이션 중인 적은 카운트 제외 - victory 가 곧바로 시작되게.
+		if (static_cast<const CEnemyObject*>(p.get())->IsDying()) continue;
+		++n;
 	}
 	return n;
 }
@@ -238,6 +245,8 @@ std::vector<std::pair<XMFLOAT3, XMFLOAT3>> CScene::GetAliveEnemyAABBs() const
 	for (const auto& p : m_vShaders[idx].GetObjects()) {
 		if (!p || !p->IsAlive()) continue;
 		if (p->GetTag() != EObjectTag::Enemy) continue;
+		// [Claude] 사망 중인 적은 조준 광선 대상에서 제외 - 시체가 조준점을 잡지 않게.
+		if (static_cast<const CEnemyObject*>(p.get())->IsDying()) continue;
 		// GetPosition 은 비-const 이므로 const_cast ? 행렬 _4* 성분만 읽는 단순 접근.
 		const XMFLOAT3 c = const_cast<CGameObject*>(p.get())->GetPosition();
 		const XMFLOAT3 h = p->GetAABBHalf();

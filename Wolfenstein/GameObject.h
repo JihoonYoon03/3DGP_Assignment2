@@ -244,6 +244,10 @@ public:
 
 	// 소총 메시 주입 / 접근은 CCharacter 가 제공한다 (SetRifleMesh, GetRifle).
 
+	// [Claude] 사망 애니메이션 상태. m_fDeathTimer 가 ≥0 이면 죽는 중 — AI 정지,
+	// 충돌/카운트 제외 대상이며, 타이머 만료 시 Kill() 로 실제 사망 처리한다.
+	bool IsDying() const { return m_fDeathTimer >= 0.0f; }
+
 private:
 	EEnemyAIState m_eAIState;
 	float         m_fStateTimer;     // 현재 상태 남은 시간(초)
@@ -277,4 +281,13 @@ private:
 	// 적 머리 위로 동기화한다. 가시성은 m_bMarkerVisible 에 따라 Scene::Render 가 결정.
 	std::shared_ptr<CGameObject> m_pMarker;
 	bool                         m_bMarkerVisible = false;
+
+	// [Claude] 사망 애니메이션 상태.
+	// m_fDeathTimer 는 -1.0f 일 때 비활성. ≥0 일 때 매 프레임 감산되며, 0 도달 시
+	// Kill() 호출로 실제 사망 처리. 0.2초 정지 후 0.8초간 옆으로 90° 쓰러진다.
+	// 회전은 사망 시점의 forward(Look) 벡터를 축으로 적용하여 우측으로 눕는 효과.
+	float       m_fDeathTimer = -1.0f;
+	XMFLOAT4X4  m_xmf4x4DeathBaseWorld{};
+	XMFLOAT3    m_xmf3DeathTipAxis{ 0.0f, 0.0f, 1.0f };
+	float       m_fDeathBaseY = 0.0f;
 };

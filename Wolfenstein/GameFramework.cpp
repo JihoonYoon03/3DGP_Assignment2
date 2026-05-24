@@ -576,8 +576,11 @@ void CGameFramework::BuildObjects()
 	if (m_pScene) {
 		m_pScene->SetOnPlayerHit([this]() {
 			if (!m_pPlayer) return;
+			// [Claude] 이미 사망 시퀀스 진행 중이면 추가 피격 무시.
+			if (m_fPlayerDeathTimer >= 0.0f) return;
 			if (m_pPlayer->GetHP() > 0) m_pPlayer->TakeDamage(1);
-			if (m_pPlayer->GetHP() <= 0) m_bResetPending = true;
+			// [Claude] HP 0 시 즉시 reset 대신 사망 타이머 시작 - 카메라 기울임 + 붉은 화면.
+			if (m_pPlayer->GetHP() <= 0) m_fPlayerDeathTimer = kPlayerDeathDuration;
 			// ??? ?????? ??? ?????? ???? ? FrameAdvance ?? ?? ?????? ????????.
 			m_fHitFlash = 1.0f;
 		});
@@ -632,7 +635,8 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 			// scene's hit-test path.
 			const SceneState st = m_pScene->GetCurrentState();
 			if (st == SceneState::MAP1 || st == SceneState::MAP2) {
-				FireBullet();
+				// [Claude] 사망 시퀀스 중엔 발사 차단.
+				if (m_fPlayerDeathTimer < 0.0f) FireBullet();
 			}
 			else {
 				m_pScene->HandleLeftClick(nMouseX, nMouseY, m_nWndClientWidth, m_nWndClientHeight, m_pCamera.get());
@@ -674,7 +678,8 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 			break;
 		case 'V':
 			// V: FPS / TPS ???? ??? (?? C). ????? ?????? ???? ????? ??????.
-			if (m_pCamera && m_pScene) {
+			// [Claude] 사망 시퀀스 중엔 시점 전환 금지 (애니메이션 방해 방지).
+			if (m_pCamera && m_pScene && m_fPlayerDeathTimer < 0.0f) {
 				const SceneState st = m_pScene->GetCurrentState();
 				if (st == SceneState::MAP1 || st == SceneState::MAP2) {
 					ECameraMode cur = m_pCamera->GetMode();
@@ -758,6 +763,14 @@ void CGameFramework::ChangeSwapChainState()
 void CGameFramework::ProcessInput()
 {
 	if (!m_pScene || !m_pCamera) return;
+
+	// [Claude] 사망 시퀀스 중엔 모든 입력(이동/시점/사격) 차단. 마우스 캡쳐는
+	// 그대로 두어 화면이 튀지 않게 한다. 사격 쿨다운만 계속 진행시켜 복귀 후
+	// 첫 클릭이 자연스럽게 발사되도록 함.
+	if (m_fPlayerDeathTimer >= 0.0f) {
+		if (m_fFireCooldown > 0.0f) m_fFireCooldown -= m_GameTimer.GetTimeElapsed();
+		return;
+	}
 
 	const SceneState state = m_pScene->GetCurrentState();
 	// 1???/3??? ???(????J ??, WASD, ????) ????? MAP1/MAP2 ?????? ??????.
@@ -1268,12 +1281,28 @@ void CGameFramework::AnimateObjects()
 
 	// ?????? 0 ???? ??? ?? ?????????? ??? ???? ?? LANDING ??????? ????.
 	// ?????? ??? GAME START ?? ?????? MAP_SELECT ?? MAP1/2 ?????? ?? ?????? ??????.
+	// [Claude] 플레이어 사망 시퀀스 진행. 활성화되면 매 프레임 카메라를 앞으로
+	// 기울이고 hit-flash 를 1.0 으로 유지한다. 타이머 만료 시 기존 m_bResetPending
+	// 경로로 위임하여 LANDING 으로 복귀.
+	if (m_fPlayerDeathTimer >= 0.0f) {
+		const float dt = m_GameTimer.GetTimeElapsed();
+		m_fPlayerDeathTimer -= dt;
+		if (m_pCamera) m_pCamera->Rotate(kPlayerDeathPitchRate * dt, 0.0f);
+		m_fHitFlash = 1.0f;
+		if (m_fPlayerDeathTimer <= 0.0f) {
+			m_fPlayerDeathTimer = -1.0f;
+			m_bResetPending     = true;
+		}
+	}
+
 	if (m_bResetPending) {
 		m_bResetPending = false;
 		m_pScene->ResetGameplayState();
 		if (m_pPlayer) m_pPlayer->SetHP(10);
 		// ????????? ?¸? ????? ???? (???? ???? ??? -1, ??? reset ??? ???).
 		m_fVictoryTimer = -1.0f;
+		// [Claude] 사망 시퀀스가 다른 경로로 reset 을 트리거했더라도 방어적으로 -1 복귀.
+		m_fPlayerDeathTimer = -1.0f;
 		m_pScene->TransitionToScene(SceneState::LANDING);
 		// ???콺 ĸ? / ??? ???? / ???? ???? ???? ? ?? ??????? ??????? ????.
 		if (m_bMouseCaptured) {
