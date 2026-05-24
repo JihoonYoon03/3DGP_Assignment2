@@ -518,6 +518,17 @@ void CEnemyObject::Animate(float fTimeElapsed)
 		matFinal.r[3] = XMVectorSet(pos.x, pos.y, pos.z, 1.0f);
 		XMStoreFloat4x4(&m_xmf4x4World, matFinal);
 
+		// [Claude] 소총도 본체와 함께 회전·하강하도록 강체 부착 효과 적용.
+		// OnHit 에서 캐시해 둔 본체-로컬 행렬을 새 본체 월드행렬에 곱해 소총의
+		// 월드행렬을 직접 갱신한다 (Animate 후반의 SetWorldOrientation 동기화는
+		// IsDying() return 으로 스킵되므로 여기서 처리해야 한다).
+		if (m_pRifle) {
+			XMMATRIX matRifleLocal = XMLoadFloat4x4(&m_xmf4x4DeathRifleLocal);
+			XMFLOAT4X4 xmf4x4Rifle;
+			XMStoreFloat4x4(&xmf4x4Rifle, XMMatrixMultiply(matRifleLocal, matFinal));
+			m_pRifle->SetWorldMatrix(xmf4x4Rifle);
+		}
+
 		if (m_fDeathTimer <= 0.0f) {
 			Kill();   // 다음 PruneDead 에서 객체 회수
 		}
@@ -729,6 +740,17 @@ void CEnemyObject::OnHit(CGameObject* pOther)
 		m_xmf4x4DeathBaseWorld = m_xmf4x4World;
 		m_xmf3DeathTipAxis     = GetLook();      // 사망 시점 forward 축
 		m_fDeathBaseY          = GetPosition().y;
+		// [Claude] 사망 시점 소총의 본체-로컬 행렬 캐시: R_local = R_world * inverse(B_world).
+		// 이후 사망 애니메이션 매 프레임마다 R_world(t) = R_local * B_world(t) 로 복원해
+		// 소총이 본체에 강체 부착된 것처럼 같이 회전·하강하도록 한다.
+		if (m_pRifle) {
+			XMMATRIX matRifleWorld = XMLoadFloat4x4(&m_pRifle->GetWorldMatrixRef());
+			XMMATRIX matBodyWorld  = XMLoadFloat4x4(&m_xmf4x4World);
+			XMVECTOR vDet;
+			XMMATRIX matBodyInv = XMMatrixInverse(&vDet, matBodyWorld);
+			XMStoreFloat4x4(&m_xmf4x4DeathRifleLocal,
+				XMMatrixMultiply(matRifleWorld, matBodyInv));
+		}
 		// 머리 위 마커 즉시 숨김 (사망 중인 적은 카운트/마커 대상 제외).
 		m_bMarkerVisible       = false;
 	}
