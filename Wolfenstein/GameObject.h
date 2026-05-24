@@ -92,6 +92,9 @@ public:
 	virtual void OnHit(CGameObject* /*pOther*/) {}
 
 	const XMFLOAT4X4& GetWorldMatrixRef() const { return m_xmf4x4World; }
+	// [Claude] 부모-자식 강체 부착(예: 사망 애니메이션 중 적 본체에 따라 도는 소총) 처럼
+	// 외부에서 이미 합성된 월드 행렬을 그대로 주입하고 싶을 때 사용.
+	void SetWorldMatrix(const XMFLOAT4X4& xmf4x4World) { m_xmf4x4World = xmf4x4World; }
 
 protected:
 	XMFLOAT4X4 m_xmf4x4World;
@@ -290,4 +293,8 @@ private:
 	XMFLOAT4X4  m_xmf4x4DeathBaseWorld{};
 	XMFLOAT3    m_xmf3DeathTipAxis{ 0.0f, 0.0f, 1.0f };
 	float       m_fDeathBaseY = 0.0f;
+	// [Claude] 사망 시점 소총의 본체-로컬 행렬 (= R_world * inverse(B_world)).
+	// 본체가 옆으로 쓰러지는 동안 소총도 강체 자식처럼 따라 회전/하강하도록
+	// Animate 가 매 프레임 본체 월드행렬에 곱해 소총 월드행렬을 계산한다.
+	XMFLOAT4X4  m_xmf4x4DeathRifleLocal{};
 };
