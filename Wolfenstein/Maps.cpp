@@ -478,8 +478,8 @@ void BuildMap1Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dC
 		XMFLOAT4(0.14f, 0.14f, 0.20f, 1.0f),  // floor B : 약간 밝은 콘크리트
 		XMFLOAT4(0.42f, 0.46f, 0.56f, 1.0f),  // wall A  : 회청색 강철
 		XMFLOAT4(0.32f, 0.36f, 0.46f, 1.0f),  // wall B  : 어두운 강철 (체크 패턴)
-		XMFLOAT4(0.68f, 0.55f, 0.32f, 1.0f),  // stair   : 흙색 갈색
-		XMFLOAT4(0.92f, 0.82f, 0.42f, 1.0f)); // platform: 밝은 황색
+		XMFLOAT4(0.38f, 0.45f, 0.52f, 1.0f),  // stair   : 흙색 갈색
+		XMFLOAT4(0.32f, 0.62f, 0.82f, 1.0f)); // platform: 밝은 황색
 }
 
 void BuildMap2Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
