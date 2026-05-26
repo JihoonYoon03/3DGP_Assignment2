@@ -5,17 +5,9 @@
 #include <memory>
 #include <vector>
 
-// Generalized collision query. Pass the object container and two tags; the
-// helper visits every (a, b) pair where a has tagA and b has tagB and their
-// axis-aligned bounding boxes overlap, invoking `cb` for each overlap.
-//
-// Adding a new participant -- e.g. an enemy actor next sprint -- only
-// requires that the actor sets its tag to EObjectTag::Enemy and lives in the
-// same per-scene object list. Bullets vs. enemies, enemies vs. player, etc.
-// are all expressed as a single call here with the appropriate tag pair.
-//
-// tagA == tagB is allowed; in that case each unordered pair is reported
-// once. Dead objects (IsAlive() == false) are skipped on both sides.
+// 태그 기반 AABB 충돌 검사 헬퍼.
+// tagA × tagB 의 모든 쌍에 대해 AABB 가 겹치면 cb 콜백을 호출한다.
+// tagA == tagB 일 때는 unordered 쌍을 한 번씩만 보고한다.
 namespace Collision {
 
 	using HitCallback = std::function<void(CGameObject* a, CGameObject* b)>;

@@ -9,8 +9,7 @@ struct VS_CB_CAMERA_INFO
 	XMFLOAT4X4 m_xmf4x4Projection;
 };
 
-// 카메라 시점 모드. FPS = 1인칭(카메라 위치 = 플레이어 위치), TPS = 3인칭(플레이어 뒤로 약 7m 떨어진 어깨너머 위치).
-// 모드 결정/전환은 CGameFramework::ProcessInput 에서 Tab 키 입력에 따라 분기한다.
+// 카메라 시점 모드 (FPS=1인칭, TPS=3인칭 어깨너머)
 enum class ECameraMode { FPS, TPS };
 
 class CCamera {
@@ -54,14 +53,10 @@ public:
 	const XMFLOAT3& GetPosition() const { return m_xmf3Position; }
 	const XMFLOAT3& GetLook() const { return m_xmf3Look; }
 	const XMFLOAT3& GetRight() const { return m_xmf3Right; }
-	// Returns the camera yaw used by the TPS path to keep the player model
-	// rotation in sync with the view direction.
 	float GetYaw() const { return m_fYaw; }
 	float GetPitch() const { return m_fPitch; }
 
-	// TPS 전용: pos 에 카메라를 놓고 target 을 바라보도록 look/right/up 과 뷰 행렬을
-	// 재생성한다. m_fPitch / m_fYaw(궤도 각도)는 변경하지 않으므로 다음 Rotate() 호출이
-	// 올바른 델타로 누적된다.
+	// TPS 전용: pos 에서 target 을 바라보도록 뷰 행렬만 재생성 (yaw/pitch 는 유지)
 	void SetPositionAndTarget(const XMFLOAT3& pos, const XMFLOAT3& target);
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
 
@@ -73,7 +68,7 @@ public:
 	const XMFLOAT4X4& GetViewMatrix() const { return m_xmf4x4View; }
 	const XMFLOAT4X4& GetProjectionMatrix() const { return m_xmf4x4Projection; }
 
-	// 카메라 모드 게터/세터 ? Tab 토글 시 외부에서 호출.
+	// 카메라 모드 게터/세터
 	ECameraMode GetMode() const { return m_eMode; }
 	void SetMode(ECameraMode eMode) { m_eMode = eMode; }
 };

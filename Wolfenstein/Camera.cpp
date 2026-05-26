@@ -39,7 +39,7 @@ void CCamera::GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlane
 
 void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up)
 {
-	// 이 함수는 카메라의 초기 위치와 바라보는 방향을 셋업한다. 이후 Move/Rotate 호출이 누적된다.
+	// 카메라 초기 위치/방향 셋업
 	m_xmf3Position = xmf3Position;
 
 	XMVECTOR vPos = XMLoadFloat3(&xmf3Position);
@@ -54,7 +54,7 @@ void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMF
 	XMStoreFloat3(&m_xmf3Right, vRight);
 	XMStoreFloat3(&m_xmf3Up, vUp);
 
-	// look 벡터로부터 yaw/pitch 를 역산해 저장함으로써 이후 Rotate 호출이 자연스럽게 누적될 수 있도록 한다.
+	// look 벡터에서 yaw/pitch 역산 (이후 Rotate 누적용)
 	m_fPitch = asinf(m_xmf3Look.y);
 	m_fYaw = atan2f(m_xmf3Look.x, m_xmf3Look.z);
 
@@ -77,16 +77,15 @@ void CCamera::SetPosition(const XMFLOAT3& xmf3Position)
 
 void CCamera::Rotate(float fPitchDelta, float fYawDelta)
 {
-	// 상하/좌우 회전(Pitch / Yaw) 각도 갱신.
 	m_fPitch += fPitchDelta;
 	m_fYaw += fYawDelta;
 
-	// 위/아래를 너무 가파르게 보면 시야가 뒤집힐 수 있으므로 수직 90°(89°) 부근에서 제한한다.
+	// pitch 는 89도로 제한 (시야 뒤집힘 방지)
 	const float kPitchLimit = XMConvertToRadians(89.0f);
 	if (m_fPitch > kPitchLimit) m_fPitch = kPitchLimit;
 	if (m_fPitch < -kPitchLimit) m_fPitch = -kPitchLimit;
 
-	// Yaw 를 -2π ~ +2π 범위로 정규화한다 (오버플로우 방지).
+	// yaw 오버플로우 방지
 	const float kTwoPi = XM_2PI;
 	if (m_fYaw > kTwoPi) m_fYaw -= kTwoPi;
 	if (m_fYaw < -kTwoPi) m_fYaw += kTwoPi;
@@ -96,13 +95,13 @@ void CCamera::Rotate(float fPitchDelta, float fYawDelta)
 
 void CCamera::RegenerateViewMatrix()
 {
-	// Pitch/Yaw 로부터 새 look 벡터를 만들고, 월드-업 축(0,1,0) 을 이용해 right/up 벡터를 재구성한다.
+	// Pitch/Yaw 로부터 look 벡터를 만들고 right/up 도 재계산
 	const float cp = cosf(m_fPitch);
 	const float sp = sinf(m_fPitch);
 	const float cy = cosf(m_fYaw);
 	const float sy = sinf(m_fYaw);
 
-	// Left-Handed: +Z = forward, +X = right, +Y = up.
+	// Left-Handed: +Z = forward
 	m_xmf3Look = XMFLOAT3(sy * cp, sp, cy * cp);
 
 	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -129,11 +128,9 @@ void CCamera::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 
 void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 {
+	// row-major → column-major 전치 후 b1 슬롯에 업로드
 	XMFLOAT4X4 xmf4x4View;
-	// 행 우선 -> 열 우선으로 행렬 전치 (HLSL 은 column-major 기본).
 	XMStoreFloat4x4(&xmf4x4View, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4View)));
-
-	// Root Parameter Index 1 에 16개의 32BitConstants 로 view 행렬 업로드.
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4View, 0);
 
 	XMFLOAT4X4 xmf4x4Projection;
@@ -163,7 +160,7 @@ void CCamera::SetPositionAndTarget(const XMFLOAT3& pos, const XMFLOAT3& target)
 
 	XMFLOAT3 upHint; XMStoreFloat3(&upHint, vUp);
 	m_xmf4x4View = Matrix4x4::LookAtLH(pos, target, upHint);
-	// m_fPitch / m_fYaw 는 궤도 각도로 유지 (변경 금지)
+	// pitch/yaw 는 변경하지 않음
 }
 
 void CCamera::SetViewportsAndScissorRects(ID3D12GraphicsCommandList* pd3dCommandList)

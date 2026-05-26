@@ -9,13 +9,13 @@
 #include <functional>
 
 namespace {
-	// Wolfenstein 풍 미로의 기본 단위.
-	constexpr float TILE = 4.0f;        // 셀 하나의 가로/세로 크기
-	constexpr float WALL_H = 8.0f;      // 천장까지 솟은 벽 한 칸 높이
-	constexpr float FLOOR_H = 0.2f;     // 바닥 두께
-	constexpr float STEP_H = 0.7f;      // 단차 한 단의 높이
+	// 미로 기본 단위
+	constexpr float TILE = 4.0f;
+	constexpr float WALL_H = 8.0f;
+	constexpr float FLOOR_H = 0.2f;
+	constexpr float STEP_H = 0.7f;
 
-	// 한 개의 큐브 게임 오브젝트를 만들어 vector 에 추가한다.
+	// 큐브 하나를 만들어 벡터에 추가
 	void AddCube(
 		ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		std::vector<std::shared_ptr<CGameObject>>& vObjects,
@@ -30,17 +30,11 @@ namespace {
 		vObjects.push_back(std::move(pObj));
 	}
 
-	// 격자 그리드를 받아 미로 큐브를 배치한다.
-	// 셀 의미:
-	//   'W' : 벽 (높이는 wallHeights 가 0 이 아니면 그 값, 0 이면 기본 WALL_H)
-	//   '.' : 평면 바닥 (높이 0)
-	//   '1' ~ '3' : 바닥 큐브 자체가 STEP_H * n 높이로 솟아오른 단차 바닥
-	//               (별도의 슬랩을 위에 얹지 않고 큐브 윗면이 그 높이에 위치)
-	// 그 외 문자는 만나면 평면 바닥으로 처리.
-	//
-	// [Claude] 정적 미로 큐브를 단일 CMergedCubeMesh 로 통합하여 ~1800 draw call → 1 로
-	// 감소. 셀 색/크기 정보는 정점 색상으로 베이크되며 모든 큐브가 한 번에 그려진다.
-	// 회전이 없는 정적 기하만 통합 대상 (벽/바닥). 동적 객체(적/총알) 는 그대로 유지.
+	// 격자 문자열에서 미로 큐브를 만들어낸다
+	//   'W' : 벽
+	//   '.' : 평면 바닥
+	//   '1'~'3' : STEP_H * n 높이의 단차 바닥
+	// 정적 큐브는 모두 하나의 통합 메시로 합쳐서 드로우 콜을 절약한다.
 	void BuildMazeFromGrid(
 		ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		std::vector<std::shared_ptr<CGameObject>>& vObjects,
@@ -55,10 +49,7 @@ namespace {
 		const float halfX = (cols - 1) * TILE * 0.5f;
 		const float halfZ = (rows - 1) * TILE * 0.5f;
 
-		// 단차 바닥은 '1'..'3' 문자로 1~3 STEP_H 높이를 인코딩한다.
-		// 별도의 슬랩(판)을 위에 올리지 않고 바닥 큐브 자체의 두께를 늘려
-		// 윗면이 step * STEP_H 에 오도록 한다.
-		// colorStair 는 그라데이션의 끝점 색으로 재사용되고, colorPlatform 은 사용 X.
+		// 단차 그라데이션을 위한 색상 보간
 		auto lerp4 = [](const XMFLOAT4& a, const XMFLOAT4& b, float t) {
 			XMFLOAT4 r;
 			r.x = a.x * (1.0f - t) + b.x * t;
@@ -69,7 +60,6 @@ namespace {
 		};
 		(void)colorPlatform;
 
-		// [Claude] 모든 정적 큐브 정보를 한 곳에 모았다가 마지막에 단일 메시로 합친다.
 		std::vector<CMergedCubeMesh::Cube> aggCubes;
 		aggCubes.reserve(static_cast<size_t>(rows) * cols * 2);
 
@@ -81,8 +71,7 @@ namespace {
 				const bool parity = ((r + c) % 2 == 0);
 
 				if (ch == 'W') {
-					// Wall cell. Keep a thin base tile under it so floor and
-					// wall corners stay flush at floor level 0.
+					// 벽 셀: 바닥 큐브와 벽 큐브를 함께 배치
 					const XMFLOAT4 fc = parity ? colorFloorA : colorFloorB;
 					aggCubes.push_back({
 						XMFLOAT3(x, -FLOOR_H * 0.5f, z),
@@ -95,7 +84,7 @@ namespace {
 					continue;
 				}
 
-				// 평면('.') 또는 단차 바닥('1'..'3'). step == 0 은 '.' (기본 높이).
+				// 바닥 ('.' 또는 '1'..'3')
 				int step = 0;
 				if (ch >= '1' && ch <= '3') step = ch - '0';
 
@@ -111,8 +100,7 @@ namespace {
 			}
 		}
 
-		// [Claude] 통합 메시 생성 + 단일 GameObject 로 push. 정점이 이미 월드 좌표라서
-		// world 행렬은 identity. world 행렬을 root constants 로 보내는 호출 1 번 + draw 1 번.
+		// 통합 메시 하나로 합쳐 단일 게임 오브젝트로 등록
 		if (!aggCubes.empty()) {
 			auto pMesh = std::make_shared<CMergedCubeMesh>(pd3dDevice, pd3dCommandList, aggCubes);
 			auto pObj  = std::make_shared<CGameObject>();
@@ -121,14 +109,7 @@ namespace {
 		}
 	}
 
-	// === 통로 폭 확장 (옵션 A) ===
-	// 모든 '.' 셀을 시드로 BFS 를 K 단계 진행하면서, 만나는 벽 셀을 일정 확률로 허물어 통로 폭을 넓힌다.
-	// 결과: 폭 1 ~ 2 셀의 자연스러운 미로가 됨.
-	// (실제 구현은 그리디 인접 확장 방식 ? 각 셀의 25% 확률로 인접 벽 1 칸을 통로로 바꿈)
-	// 외곽 경계와 스폰 셀(1,1) 부근은 보존한다.
-	// Post-DFS widening pass: visit each '.' cell and occasionally knock a
-	// neighboring wall down. This breaks the strict 1-tile corridor look.
-	// Outer ring is preserved. Spawn (1,1) and its immediate area are kept.
+	// 통로 폭 넓히기: 25% 확률로 인접 벽 한 칸을 통로로 바꾼다
 	void WidenCorridors(std::vector<std::string>& grid, std::mt19937& rng)
 	{
 		const int rows = static_cast<int>(grid.size());
@@ -163,13 +144,12 @@ namespace {
 		}
 	}
 
-	// Plant several rectangular rooms (2x2 .. 4x4) inside the maze.
-	// Connectivity is preserved because the DFS skeleton stays intact.
+	// 미로 안에 2x2 ~ 4x4 직사각 방을 6~10개 정도 배치
 	void PlantRooms(std::vector<std::string>& grid, std::mt19937& rng)
 	{
 		const int rows = static_cast<int>(grid.size());
 		const int cols = static_cast<int>(grid[0].size());
-		const int nRooms = 6 + static_cast<int>(rng() % 5u); // 6 .. 10
+		const int nRooms = 6 + static_cast<int>(rng() % 5u);
 
 		std::vector<std::pair<int, int>> placed;
 		placed.reserve(nRooms);
@@ -197,20 +177,14 @@ namespace {
 		}
 	}
 
-	// === 영역별 랜덤 높이 부여 (소영역 + 균등 무작위) ===
-	// 보행 가능한 '.' 셀을 3~7칸 크기의 작은 영역으로 무작위 그리디 BFS 로 분할한 뒤,
-	// 각 영역에 0~3 STEP_H 범위의 무작위 높이를 부여한다.
-	// 같은 높이를 공유하는 연결 영역의 크기를 최소 3, 최대 7 로 유지하여
-	// "특정 구역에 두꺼운 판이 붙은" 외형 대신 곳곳이 잘게 변화하는 지형을 만든다.
-	// 점프 정점이 3 * STEP_H 이므로 모든 인접 영역 사이를 점프로 통과할 수 있다.
-	// 인접 영역끼리는 가능하면 다른 높이를 갖도록 보정해 시각적 단차를 강조한다.
+	// 보행 가능한 영역을 3~7칸 단위로 잘게 나누어 0~3 STEP_H 높이를 무작위 부여
 	void PartitionFloorRegions(std::vector<std::string>& grid, std::mt19937& rng)
 	{
 		const int rows = static_cast<int>(grid.size());
 		const int cols = static_cast<int>(grid[0].size());
 		const int d4[4][2] = { {-1,0},{1,0},{0,-1},{0,1} };
 
-		// 1. 보행 가능한 '.' 셀 모음
+		// 보행 가능 셀 모으기
 		std::vector<std::pair<int, int>> walkable;
 		for (int r = 0; r < rows; ++r) {
 			for (int c = 0; c < cols; ++c) {
@@ -219,7 +193,7 @@ namespace {
 		}
 		if (walkable.empty()) return;
 
-		// 2. 시드 순회 순서를 무작위로 섞는다 (Fisher-Yates).
+		// 시드 순회 순서를 무작위로 섞기
 		std::vector<int> order(walkable.size());
 		for (size_t i = 0; i < order.size(); ++i) order[i] = static_cast<int>(i);
 		for (int i = static_cast<int>(order.size()) - 1; i > 0; --i) {
@@ -227,8 +201,7 @@ namespace {
 			std::swap(order[i], order[j]);
 		}
 
-		// 3. 그리디 BFS 성장: 미할당 셀을 시드로 잡아 목표 3~7 크기까지 키운다.
-		//    매 pop 마다 4-방향 순서를 섞어 길쭉한 편향을 줄인다.
+		// 그리디 BFS 로 3~7 크기 영역 키우기
 		std::vector<std::vector<int>> regionId(rows, std::vector<int>(cols, -1));
 		std::vector<std::vector<std::pair<int, int>>> regionCells;
 		for (int idx : order) {
@@ -241,7 +214,7 @@ namespace {
 			regionId[sr][sc] = rid;
 			regionCells[rid].emplace_back(sr, sc);
 
-			const int target = 3 + static_cast<int>(rng() % 5u); // 3..7
+			const int target = 3 + static_cast<int>(rng() % 5u);
 			std::queue<std::pair<int, int>> bq;
 			bq.emplace(sr, sc);
 			while (static_cast<int>(regionCells[rid].size()) < target && !bq.empty()) {
@@ -264,7 +237,7 @@ namespace {
 
 		const int K = static_cast<int>(regionCells.size());
 
-		// 4. 인접 영역 그래프 (병합 및 색칠에 사용)
+		// 인접 영역 그래프
 		std::vector<std::vector<int>> adj(K);
 		auto addEdge = [&](int a, int b) {
 			if (a == b) return;
@@ -284,9 +257,7 @@ namespace {
 			}
 		}
 
-		// 5. 너무 작은 영역(1~2칸)을 이웃에 흡수한다.
-		//    합쳐도 7 을 넘지 않는 이웃 중 가장 작은 것을 우선. 모두 포화면
-		//    가장 작은 이웃에 합쳐 8~9 정도까지 허용.
+		// 너무 작은 영역을 이웃에 흡수
 		auto mergeInto = [&](int src, int dst) {
 			for (auto& cell : regionCells[src]) regionId[cell.first][cell.second] = dst;
 			regionCells[dst].insert(regionCells[dst].end(), regionCells[src].begin(), regionCells[src].end());
@@ -313,14 +284,13 @@ namespace {
 					if (nsz < bestAnySize) { bestAny = nb; bestAnySize = nsz; }
 				}
 				int dst = (bestUnder >= 0) ? bestUnder : bestAny;
-				if (dst < 0) continue; // 고립된 영역: 그대로 둠 (드문 케이스)
+				if (dst < 0) continue;
 				mergeInto(rid, dst);
 				changed = true;
 			}
 		}
 
-		// 6. 영역별 높이 부여 [0..3]. 인접 영역과 다른 높이를 우선 선택해
-		//    시각적으로 평탄한 덩어리가 생기지 않도록 한다.
+		// 영역별 높이 부여 (인접과 다른 높이 우선)
 		std::vector<int> heights(K, -1);
 		for (int rid = 0; rid < K; ++rid) {
 			if (regionCells[rid].empty()) continue;
@@ -333,17 +303,16 @@ namespace {
 			if (nOpt > 0) {
 				heights[rid] = options[rng() % static_cast<unsigned>(nOpt)];
 			} else {
-				// 4 색이 모두 막힌 매우 드문 경우: 그냥 무작위.
 				heights[rid] = static_cast<int>(rng() % 4u);
 			}
 		}
 
-		// 7. 스폰 셀 (1,1) 소속 영역은 0 으로 강제 (스폰 직후 공중에 뜨지 않게).
+		// 스폰 셀 영역은 0 으로 강제
 		if (1 < rows && 1 < cols && regionId[1][1] >= 0) {
 			heights[regionId[1][1]] = 0;
 		}
 
-		// 8. 결과를 그리드에 반영. 높이 0 은 '.' 유지, 1~3 은 '1'~'3' 으로 기록.
+		// 결과를 그리드에 반영
 		for (int r = 0; r < rows; ++r) {
 			for (int c = 0; c < cols; ++c) {
 				if (grid[r][c] != '.') continue;
@@ -355,9 +324,7 @@ namespace {
 		}
 	}
 
-	// === DFS 미로 골격 + 영역 정리 ===
-	// 30x30 격자를 모두 벽(W)으로 채운 뒤, DFS 로 통로 경로를 깎고,
-	// 통로 영역에 변화를 주어 외형을 다양화한다.
+	// DFS 로 미로 골격을 만들고 후처리(통로 확장 + 방 배치 + 단차)
 	std::vector<std::string> GenerateMaze(int rows, int cols, unsigned int seed)
 	{
 		std::vector<std::string> grid(rows, std::string(cols, 'W'));
@@ -389,42 +356,34 @@ namespace {
 			int pick = options[rng() % options.size()];
 			int nr = r + dirs[pick][0];
 			int nc = c + dirs[pick][1];
-			// 두 셀 사이의 벽을 함께 허물어 경로를 만든다.
+			// 두 셀 사이 벽도 같이 허물어 경로를 만듦
 			grid[r + dirs[pick][0] / 2][c + dirs[pick][1] / 2] = '.';
 			grid[nr][nc] = '.';
 			stack.emplace_back(nr, nc);
 		}
 
-		// Break the strict 1-tile corridor look and plant a few rooms so the
-		// space reads as varied in width. PartitionFloorRegions still runs on
-		// the resulting '.' cells.
 		WidenCorridors(grid, rng);
 		PlantRooms(grid, rng);
-
-		// 통로의 폭과 방 배치 분배('1' 등은 추후 부여), 영역 단위 단차 높이를 부여한다.
 		PartitionFloorRegions(grid, rng);
 
 		return grid;
 	}
 
-	// 맵 1 (36x36) - 시드 1 로 생성한 미로.
+	// 맵 1: 시드 1
 	const std::vector<std::string>& Map1Grid()
 	{
 		static const std::vector<std::string> grid = GenerateMaze(36, 36, 1u);
 		return grid;
 	}
 
-	// 맵 2 (36x36) - 다른 시드(2) 로 생성해 전혀 다른 모양의 미로.
+	// 맵 2: 시드 2 (다른 모양)
 	const std::vector<std::string>& Map2Grid()
 	{
 		static const std::vector<std::string> grid = GenerateMaze(36, 36, 2u);
 		return grid;
 	}
 
-	// === 벽 군집 별 높이 차등 부여 (옵션 B) ===
-	// 'W' 셀들의 4방향 연결 영역(군집)을 BFS 로 묶고,
-	// 군집 크기가 10 셀 이상이면 그 군집 전체에 통일된 높이를 부여한다.
-	// 10 셀 미만의 짧은 벽 군집은 0.0f 를 반환해 BuildMazeFromGrid 가 기본 WALL_H 를 적용하도록 한다.
+	// 벽 군집(10셀 이상)에 통일된 높이를 부여
 	std::vector<std::vector<float>> ComputeWallHeights(const std::vector<std::string>& grid, unsigned int seed)
 	{
 		const int rows = static_cast<int>(grid.size());
@@ -454,13 +413,12 @@ namespace {
 					}
 				}
 				if (static_cast<int>(comp.size()) >= 10) {
-					// 8.0, 9.4, 10.8, 12.2 중 하나를 군집 전체에 부여한다.
+					// 8.0 / 9.4 / 10.8 / 12.2 중 하나
 					const float h = WALL_H + static_cast<float>(rng() % 4u) * STEP_H * 2.0f;
 					for (size_t i = 0; i < comp.size(); ++i) {
 						out[comp[i].first][comp[i].second] = h;
 					}
 				}
-				// 10 미만이면 out 은 0 그대로 -> 기본 WALL_H 적용
 			}
 		}
 		return out;
@@ -470,37 +428,36 @@ namespace {
 void BuildMap1Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	std::vector<std::shared_ptr<CGameObject>>& vObjects)
 {
-	// 어두운 회청색 톤 미로. 차가운 분위기 배색.
+	// 어두운 회청색 톤 미로
 	const auto& grid = Map1Grid();
 	const auto wallH = ComputeWallHeights(grid, 1u);
 	BuildMazeFromGrid(pd3dDevice, pd3dCommandList, vObjects, grid, wallH,
-		XMFLOAT4(0.10f, 0.10f, 0.14f, 1.0f),  // floor A : 어두운 콘크리트
-		XMFLOAT4(0.14f, 0.14f, 0.20f, 1.0f),  // floor B : 약간 밝은 콘크리트
-		XMFLOAT4(0.42f, 0.46f, 0.56f, 1.0f),  // wall A  : 회청색 강철
-		XMFLOAT4(0.32f, 0.36f, 0.46f, 1.0f),  // wall B  : 어두운 강철 (체크 패턴)
-		XMFLOAT4(0.68f, 0.55f, 0.32f, 1.0f),  // stair   : 흙색 갈색
-		XMFLOAT4(0.92f, 0.82f, 0.42f, 1.0f)); // platform: 밝은 황색
+		XMFLOAT4(0.10f, 0.10f, 0.14f, 1.0f),
+		XMFLOAT4(0.14f, 0.14f, 0.20f, 1.0f),
+		XMFLOAT4(0.42f, 0.46f, 0.56f, 1.0f),
+		XMFLOAT4(0.32f, 0.36f, 0.46f, 1.0f),
+		XMFLOAT4(0.68f, 0.55f, 0.32f, 1.0f),
+		XMFLOAT4(0.92f, 0.82f, 0.42f, 1.0f));
 }
 
 void BuildMap2Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	std::vector<std::shared_ptr<CGameObject>>& vObjects)
 {
-	// 따뜻한 갈색 톤의 미로. 모래성 같은 분위기.
+	// 따뜻한 갈색 톤 미로
 	const auto& grid = Map2Grid();
 	const auto wallH = ComputeWallHeights(grid, 2u);
 	BuildMazeFromGrid(pd3dDevice, pd3dCommandList, vObjects, grid, wallH,
-		XMFLOAT4(0.18f, 0.12f, 0.07f, 1.0f),  // floor A : 짙은 흙색
-		XMFLOAT4(0.26f, 0.18f, 0.10f, 1.0f),  // floor B : 약간 밝은 흙색
-		XMFLOAT4(0.55f, 0.32f, 0.18f, 1.0f),  // wall A  : 적갈색
-		XMFLOAT4(0.42f, 0.24f, 0.14f, 1.0f),  // wall B  : 어두운 적갈색
-		XMFLOAT4(0.78f, 0.50f, 0.22f, 1.0f),  // stair   : 황갈색 사암
-		XMFLOAT4(1.00f, 0.78f, 0.32f, 1.0f)); // platform: 횃불 노란빛
+		XMFLOAT4(0.18f, 0.12f, 0.07f, 1.0f),
+		XMFLOAT4(0.26f, 0.18f, 0.10f, 1.0f),
+		XMFLOAT4(0.55f, 0.32f, 0.18f, 1.0f),
+		XMFLOAT4(0.42f, 0.24f, 0.14f, 1.0f),
+		XMFLOAT4(0.78f, 0.50f, 0.22f, 1.0f),
+		XMFLOAT4(1.00f, 0.78f, 0.32f, 1.0f));
 }
 
 MapInfo GetMap1Info()
 {
-	// 36x36 미로의 (행1, 열1) 시작 위치에서 정면(+Z) 방향을 바라본다.
-	// halfX = halfZ = (36-1) * TILE * 0.5 = 70
+	// (1,1) 셀에서 +Z 방향을 바라보며 시작
 	MapInfo info;
 	info.cameraPosition = XMFLOAT3(1.0f * TILE - 70.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 70.0f);
 	info.cameraLookAt   = XMFLOAT3(1.0f * TILE - 70.0f, MAP_EYE_HEIGHT - 0.2f, 3.0f * TILE - 70.0f);
@@ -509,18 +466,14 @@ MapInfo GetMap1Info()
 
 MapInfo GetMap2Info()
 {
-	// 36x36 미로의 같은 시작 위치에서 정면(+X)을 향한다. 다른 시드로 생성된 미로라 첫 풍경이 완전히 다름.
+	// 같은 위치지만 +X 방향을 바라보며 시작
 	MapInfo info;
 	info.cameraPosition = XMFLOAT3(1.0f * TILE - 70.0f, MAP_EYE_HEIGHT, 1.0f * TILE - 70.0f);
 	info.cameraLookAt   = XMFLOAT3(3.0f * TILE - 70.0f, MAP_EYE_HEIGHT - 0.2f, 1.0f * TILE - 70.0f);
 	return info;
 }
-// ===================== 충돌 처리 =====================
-// 플레이어 발 높이(fFeetY) 를 기준으로 (x,z) 방향 이동이 가능한지 판정한다.
-// W       : 항상 막힘.
-// '1'~'3' : 단차 윗면이 fFeetY + STEP_UP_TOLERANCE 보다 높으면 막힘.
-// '.'     : 항상 통과.
-// 지도 바깥은 막힘 취급.
+
+// 이동 가능 여부 판정
 namespace {
 	constexpr float STEP_UP_TOLERANCE = STEP_H + 0.05f;
 
@@ -531,11 +484,9 @@ namespace {
 		const float halfX = (cols - 1) * TILE * 0.5f;
 		const float halfZ = (rows - 1) * TILE * 0.5f;
 
-		// (x,z) -> (c,r) 환산. 셀 중심을 기준으로 0.5f 만큼의 오프셋 적용.
 		const int c = static_cast<int>(floorf((x + halfX) / TILE + 0.5f));
 		const int r = static_cast<int>(floorf((z + halfZ) / TILE + 0.5f));
 
-		// 지도 바깥은 막힘으로 처리.
 		if (c < 0 || c >= cols || r < 0 || r >= rows) return true;
 
 		char ch = grid[r][c];
@@ -544,7 +495,7 @@ namespace {
 			const float topY = STEP_H * (ch - '0');
 			return (topY > fFeetY + STEP_UP_TOLERANCE);
 		}
-		return false; // '.' 셀은 통과
+		return false;
 	}
 }
 
@@ -557,7 +508,7 @@ bool IsBlockedInMap(SceneState state, float x, float z, float fFeetY)
 	}
 }
 
-// (x,z) 위치의 현재 맵의 바닥 Y 좌표를 반환. ProcessInput 에서 중력 처리와 카메라 Y 보정에 사용한다.
+// (x,z) 위치의 바닥 Y 좌표
 namespace {
 	float GetFloorHeightInGrid(const std::vector<std::string>& grid, float x, float z)
 	{
@@ -607,10 +558,7 @@ float ClampDistanceAgainstWalls(SceneState state,
 	return maxDist;
 }
 
-// 두 지점 사이를 수평 마칭으로 훑어 벽이 가로막는지 검사한다.
-// ClampDistanceAgainstWalls 와 같은 TILE * 0.25 간격을 사용하지만,
-// 시작 / 끝 셀 부근은 검사에서 제외하여 적/플레이어 본인이 서 있는 셀이
-// 자기 자신 때문에 시야가 막히는 일이 없게 한다.
+// 두 점 사이를 마칭하며 벽 검사 (자기 셀 제외)
 bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY)
 {
 	if (state != SceneState::MAP1 && state != SceneState::MAP2) return true;
@@ -622,11 +570,10 @@ bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY)
 	const XMFLOAT3 dn{ delta.x * invLen, 0.0f, delta.z * invLen };
 
 	const float kStep = TILE * 0.25f;
-	// 시작/끝 셀의 본인 위치는 건너뛴다 (kSkip ? 본인 AABB 반경).
 	const float kSkip = TILE * 0.5f;
 	const float dStart = kSkip;
 	const float dEnd = dist - kSkip;
-	if (dEnd <= dStart) return true; // 매우 가까우면 시야가 통한다고 본다
+	if (dEnd <= dStart) return true;
 
 	for (float d = dStart; d <= dEnd; d += kStep) {
 		const float sx = from.x + dn.x * d;
@@ -636,8 +583,7 @@ bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY)
 	return true;
 }
 
-// 적 스폰 위치를 무작위로 nMax 개 골라 반환한다. 플레이어 시작 위치 기준
-// Chebyshev 거리 ≥ 5 (= 반경 5타일 바깥) 인 보행 가능 셀만 후보로 삼는다.
+// 적 스폰 위치 무작위 선택 (플레이어로부터 Chebyshev 5타일 이상 떨어진 셀)
 std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 	XMFLOAT3 xmf3PlayerStart, int nMax, float fHalfBodyY)
 {
@@ -651,7 +597,6 @@ std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 	const float halfX = (cols - 1) * TILE * 0.5f;
 	const float halfZ = (rows - 1) * TILE * 0.5f;
 
-	// 플레이어 시작 위치의 (행, 열) 환산.
 	const int playerC = static_cast<int>(floorf((xmf3PlayerStart.x + halfX) / TILE + 0.5f));
 	const int playerR = static_cast<int>(floorf((xmf3PlayerStart.z + halfZ) / TILE + 0.5f));
 
@@ -660,12 +605,10 @@ std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 	for (int r = 0; r < rows; ++r) {
 		for (int c = 0; c < cols; ++c) {
 			const char ch = grid[r][c];
-			// 평면/단차 바닥만 스폰 후보.
 			const bool walkable = (ch == '.') || (ch >= '1' && ch <= '3');
 			if (!walkable) continue;
 
-			// Chebyshev 거리 (행/열 max) ≥ 5 (= 반경 5타일 바깥).
-			// windows.h 의 max 매크로 충돌을 피하기 위해 직접 비교.
+			// Chebyshev 거리 5 이상
 			const int dr = abs(r - playerR);
 			const int dc = abs(c - playerC);
 			const int cheb = (dr > dc) ? dr : dc;
@@ -678,19 +621,16 @@ std::vector<XMFLOAT3> PickEnemySpawnPositions(SceneState state,
 		}
 	}
 
-	// 무작위 셔플 후 앞에서 nMax 개 추출.
+	// 무작위 셔플 후 앞에서 nMax 개 추출
 	std::mt19937 rng{ std::random_device{}() };
 	std::shuffle(candidates.begin(), candidates.end(), rng);
-	// windows.h 의 min 매크로 충돌을 피하기 위해 삼항 연산자 사용.
 	const size_t cap = (nMax < 0) ? 0u : static_cast<size_t>(nMax);
 	const size_t take = (candidates.size() < cap) ? candidates.size() : cap;
 	result.assign(candidates.begin(), candidates.begin() + take);
 	return result;
 }
 
-// =====================================================================================
-// A* 길찾기 ? 그리드 셀 기반 최단 경로 탐색
-// =====================================================================================
+// A* 그리드 셀 기반 최단 경로
 std::vector<XMFLOAT3> FindPathAStar(
     SceneState state,
     const XMFLOAT3& start,
@@ -706,13 +646,11 @@ std::vector<XMFLOAT3> FindPathAStar(
     const float halfX = (cols - 1) * TILE * 0.5f;
     const float halfZ = (rows - 1) * TILE * 0.5f;
 
-    // 월드 좌표 → 그리드 (열, 행) 변환
     auto WorldToGrid = [&](const XMFLOAT3& pos, int& outC, int& outR) {
         outC = static_cast<int>(floorf((pos.x + halfX) / TILE + 0.5f));
         outR = static_cast<int>(floorf((pos.z + halfZ) / TILE + 0.5f));
     };
 
-    // 그리드 (열, 행) → 월드 좌표 중심점 변환
     auto GridToWorld = [&](int c, int r) -> XMFLOAT3 {
         const float worldX = c * TILE - halfX;
         const float worldZ = r * TILE - halfZ;
@@ -724,32 +662,28 @@ std::vector<XMFLOAT3> FindPathAStar(
     WorldToGrid(start, startC, startR);
     WorldToGrid(goal,  goalC,  goalR);
 
-    // 범위 체크
     if (startC < 0 || startC >= cols || startR < 0 || startR >= rows) return {};
     if (goalC  < 0 || goalC  >= cols || goalR  < 0 || goalR  >= rows) return {};
     if (startC == goalC && startR == goalR) return {};
 
-    // 셀 통과 가능 여부: 'W' 만 불통 (단차는 TryMoveXZ 점프가 처리)
+    // 'W' 만 불통, 단차는 통과 가능
     auto isWalkable = [&](int c, int r) -> bool {
         if (c < 0 || c >= cols || r < 0 || r >= rows) return false;
         return grid[r][c] != 'W';
     };
 
-    // 평탄화 인덱스 헬퍼
     auto idx2 = [&](int c, int r) -> int { return r * cols + c; };
     const int N = rows * cols;
 
-    // A* 상태 배열
     std::vector<float> gCost(N, 1e30f);
     std::vector<bool>  closed(N, false);
-    std::vector<int>   parent(N, -1);  // 부모 셀 평탄화 인덱스
+    std::vector<int>   parent(N, -1);
 
-    // 오픈셋: {f, 평탄화 인덱스}  (min-heap)
     using PQItem = std::pair<float, int>;
     std::priority_queue<PQItem, std::vector<PQItem>, std::greater<PQItem>> openSet;
 
     auto heuristic = [&](int c, int r) -> float {
-        // 맨해튼 거리 × 셀 크기
+        // 맨해튼 거리 * 셀 크기
         return static_cast<float>(abs(c - goalC) + abs(r - goalR)) * TILE;
     };
 
@@ -757,7 +691,7 @@ std::vector<XMFLOAT3> FindPathAStar(
     gCost[startIdx] = 0.0f;
     openSet.emplace(heuristic(startC, startR), startIdx);
 
-    // 4방향 이웃 (대각선 제외 ? 벽 모서리 통과 방지)
+    // 4방향 이웃
     const int dc[4] = {  0,  0,  1, -1 };
     const int dr[4] = {  1, -1,  0,  0 };
 
@@ -774,7 +708,7 @@ std::vector<XMFLOAT3> FindPathAStar(
         ++nodesExpanded;
 
         if (curIdx == goalIdx) {
-            // 경로 역추적 (start 제외, goal 포함)
+            // 경로 역추적
             std::vector<XMFLOAT3> path;
             int pIdx = goalIdx;
             while (pIdx != startIdx) {
@@ -782,7 +716,7 @@ std::vector<XMFLOAT3> FindPathAStar(
                 const int pr = pIdx / cols;
                 path.push_back(GridToWorld(pc, pr));
                 pIdx = parent[pIdx];
-                if (pIdx < 0) break;  // 안전망
+                if (pIdx < 0) break;
             }
             std::reverse(path.begin(), path.end());
             return path;
@@ -807,5 +741,5 @@ std::vector<XMFLOAT3> FindPathAStar(
         }
     }
 
-    return {};  // 도달 불가
+    return {};
 }

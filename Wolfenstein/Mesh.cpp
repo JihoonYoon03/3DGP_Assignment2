@@ -236,13 +236,8 @@ CCubeMeshDiffused::~CCubeMeshDiffused()
 }
 
 
-// ====================================================================================
-// [Claude] CMergedCubeMesh ? 다수 직육면체를 단일 메시로 통합
-// ====================================================================================
-// 각 큐브의 정점을 미리 월드 좌표로 변환해 단일 정점/인덱스/노멀 버퍼로 합친다.
-// [Claude 수정] 면 단위 평탄 음영을 위해 큐브당 정점을 8 → 24 로 분리. 각 면의 4 정점은
-//   동일한 위치를 공유하지만 노멀이 그 면의 축 법선(±X / ±Y / ±Z) 으로 고정된다.
-//   N 개의 큐브 = 24N 정점 + 36N 인덱스 + 24N 노멀, 단 1 회의 DrawIndexedInstanced 로 렌더.
+// CMergedCubeMesh: 여러 큐브를 단일 정점/인덱스/노멀 버퍼로 통합
+// 면 단위 평탄 음영을 위해 큐브당 정점을 24개로 분리 (각 면 4정점, 노멀 공유)
 CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	const std::vector<Cube>& cubes)
 	: CMesh(pd3dDevice, pd3dCommandList)
@@ -255,9 +250,7 @@ CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	m_nIndices  = static_cast<UINT>(nCubes * 36);
 
 	if (nCubes == 0) {
-		// 빈 메시여도 Render 호출 시 안전하도록 dummy 버퍼라도 만들어두지는 않는다 ?
-		// CMesh::Render 가 m_pd3dVertexBuffer 가 없으면 IASetVertexBuffers 에서 크래시.
-		// 호출부에서 nCubes > 0 인 경우에만 인스턴스화해야 한다.
+		// 호출부에서 nCubes > 0 인 경우에만 인스턴스화할 것
 		return;
 	}
 
@@ -391,16 +384,10 @@ CMergedCubeMesh::CMergedCubeMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 }
 
 
-// ====================================================================================
-// [Claude] CObjMesh ? Wavefront .obj 파일 로더
-// ====================================================================================
-// Resources/*.obj 같은 외부 메시 파일을 런타임에 읽어 정점/노멀/인덱스 버퍼를 채운다.
-// 텍스처가 없는 파이프라인이므로 색상은 (1) o 그룹 이름 → 내장 부품 색상 테이블,
-// (2) 일치 없으면 호출자가 넘긴 폴백 색으로 결정한다. 면 단위 평탄 음영을 위해
-// 페이스마다 정점을 새로 생성한다(공유 X).
+// CObjMesh: Wavefront .obj 파일 로더 (텍스처 없이 색상만, 면별 평탄 음영)
 namespace {
 
-// 대소문자 무시 비교용 ? std::tolower 는 char 가 음수일 때 UB 이므로 unsigned char 캐스트.
+// 대소문자 무시 비교용 (unsigned char 캐스트로 UB 회피)
 inline char ToLowerASCII(char c) {
 	return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 }
@@ -414,8 +401,7 @@ bool EqualsIgnoreCase(const std::string& a, const char* b) {
 	return b[la] == '\0';
 }
 
-// 부품 이름 → 색상. 일치하는 항목이 없으면 fallback 반환.
-// (대소문자 무시) ? Blender export 의 o 그룹 이름과 매칭한다.
+// 부품 이름 → 색상 매핑 (Blender export 의 o 그룹 이름 기준)
 XMFLOAT4 ResolveGunPartColor(const std::string& sName, XMFLOAT4 fallback) {
 	// 나무 개머리판
 	if (EqualsIgnoreCase(sName, "Stock"))        return XMFLOAT4(0.10f, 0.08f, 0.08f, 1.0f);
