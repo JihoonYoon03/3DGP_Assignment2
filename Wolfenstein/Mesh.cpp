@@ -40,6 +40,7 @@ void CMesh::Render(ID3D12GraphicsCommandList* pd3dCommandList)
 
 	// 위치/색 정점 버퍼(slot 0) 바인딩.
 	pd3dCommandList->IASetVertexBuffers(m_nSlot, 1, &m_d3dVertexBufferView);
+	// 에러 수정 필요
 
 	// 노멀이 있으면 slot 1 에 추가 바인딩 (라이팅 셰이더용).
 	if (m_bHasNormals) {
