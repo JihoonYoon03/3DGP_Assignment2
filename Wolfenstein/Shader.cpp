@@ -333,8 +333,7 @@ CHitOverlayShader::~CHitOverlayShader()
 
 D3D12_INPUT_LAYOUT_DESC CHitOverlayShader::CreateInputLayout()
 {
-	// CHudShader 와 동일한 (POSITION + COLOR) 레이아웃 ? COLOR 는 미사용이지만
-	// VS_HUD_INPUT 구조체를 재사용해 컴파일 호환성을 유지한다.
+	// HUD 와 동일한 POSITION + COLOR 레이아웃 (COLOR 는 사용 안 함)
 	UINT nInputElementDescs = 2;
 	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
 	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
@@ -425,17 +424,12 @@ CObjectsShader::~CObjectsShader()
 void CObjectsShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList
 	* pd3dCommandList)
 {
-	// 가로x세로x깊이 12x12x12의 직육면체 메시를 생성한다.
+	// 12x12x12 큐브 메시
 	std::shared_ptr<CCubeMeshDiffused> pCubeMesh =
 		std::make_shared<CCubeMeshDiffused>(pd3dDevice, pd3dCommandList, 12.0f, 12.0f, 12.0f);
 
-	/* x-??, y-??, z-?? ???? ?????? ??u ???????.
-	?? ???? 1?? ?ø???? ????? ?????? ?? ?????? ??????? ????
-	????? ???? ???캸?? ?????.*/
+	// 21x21x21 = 9261 개의 회전 큐브 생성
 	int xObjects = 10, yObjects = 10, zObjects = 10, i = 0;
-	
-	// x-축, y-축, z-축으로 21개씩 총 21 x 21 x 21 = 9261개의 직육면체를 생성하여 배치한다.
-	
 	m_vObjects.reserve((xObjects * 2 + 1) * (yObjects * 2 + 1) * (zObjects * 2 + 1));
 
 	float fxPitch = 12.0f * 2.5f;
@@ -451,8 +445,8 @@ void CObjectsShader::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsComman
 			{
 				pRotatingObject = new CRotatingObject;
 
+				// 큐브 메시는 공유해서 사용
 				pRotatingObject->SetMesh(pCubeMesh);
-				// 한 직육면체 메시를 여러 개 공유해서 사용한다.
 				pRotatingObject->SetPosition(fxPitch*x, fyPitch*y, fzPitch*z);
 				pRotatingObject->SetRotationAxis(XMFLOAT3(0.0f, 1.0f, 0.0f));
 				pRotatingObject->SetRotationSpeed(10.0f * (i % 10) + 3.0f);
@@ -472,15 +466,8 @@ void CObjectsShader::ReleaseObjects()
 
 void CObjectsShader::AnimateObjects(float fTimeElapsed)
 {
-	// [Claude] CEnemyObject::Animate 가 m_fnFire 콜백으로 SpawnEnemyBullet 을 호출하면
-	// 같은 m_vObjects 에 push_back 이 발생한다. capacity 초과 시 재할당이 일어나
-	// range-for 의 참조/이터레이터가 무효화되고, 다음 반복의 pObject->IsAlive() 가
-	// 해제된 메모리를 읽어 액세스 위반이 발생한다(보고된 AV 의 원인).
-	//
-	// 대응:
-	//  1) 시작 시점 객체 수를 스냅샷으로 잡아 이번 프레임에 새로 추가된 총알은
-	//     다음 프레임부터 Animate. (스폰 후 이동 시작이 1 프레임 늦지만 16ms 수준)
-	//  2) 매 반복마다 shared_ptr 사본을 잡아 슬롯이 재배치되어도 객체가 살아있게.
+	// 적이 발사 콜백으로 m_vObjects 에 총알을 push_back 하므로 재할당 대비.
+	// 시작 시점 크기를 스냅샷으로 잡고, 매 반복마다 shared_ptr 사본을 잡아 무효화 방지.
 	const size_t nCount = m_vObjects.size();
 	for (size_t i = 0; i < nCount; ++i) {
 		std::shared_ptr<CGameObject> pObject = m_vObjects[i];
