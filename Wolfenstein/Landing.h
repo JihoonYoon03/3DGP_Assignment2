@@ -4,30 +4,30 @@
 #include "GameObject.h"
 
 namespace LandingParams {
-	// Camera configuration for landing screen
+	// 메인화면 카메라
 	constexpr XMFLOAT3 CAMERA_POSITION{ 0.0f, 5.0f, -25.0f };
 	constexpr XMFLOAT3 CAMERA_LOOK_AT{ 0.0f, 0.0f, 0.0f };
 	constexpr XMFLOAT3 CAMERA_UP{ 0.0f, 1.0f, 0.0f };
 	constexpr float CAMERA_FOV_Y_DEG = 45.0f;
 
-	// Title ("THE MAZE") configuration
+	// THE MAZE 타이틀 설정
 	constexpr XMFLOAT3 TITLE_ANCHOR_POSITION{ -50.0f, 20.0f, 0.0f };
 	constexpr float TITLE_PIXEL_SIZE = 1.2f;
 	constexpr float TITLE_LETTER_PITCH_PIXELS = 6.5f;
 	constexpr XMFLOAT4 TITLE_COLOR{ 1.0f, 1.0f, 1.0f, 1.0f };
 
-	// Title wave animation
+	// 타이틀 파도타기 애니메이션 설정
 	constexpr float TITLE_WAVE_AMPLITUDE = 1.0f;
 	constexpr float TITLE_WAVE_FREQUENCY_HZ = 2.0f;
 	constexpr float TITLE_WAVE_PHASE_OFFSET_PER_LETTER = 0.35f;
 
-	// Button ("GAME START") configuration
+	// GAME START 버튼
 	constexpr XMFLOAT3 BUTTON_ANCHOR_POSITION{ 25.0f, 0.0f, 0.0f };
 	constexpr float BUTTON_PIXEL_SIZE = 0.5f;
 	constexpr float BUTTON_LETTER_PITCH_PIXELS = 6.0f;
 	constexpr XMFLOAT4 BUTTON_COLOR{ 0.2f, 1.0f, 0.2f, 1.0f };
 
-	// Button hit-test configuration
+	// 버튼 영역 설정
 	constexpr float BUTTON_HITBOX_PADDING_X = 0.5f;
 	constexpr float BUTTON_HITBOX_PADDING_Y = 0.5f;
 };
@@ -77,7 +77,7 @@ protected:
 	std::vector<std::shared_ptr<CLetterObject>> m_vLetters;
 	XMFLOAT3 m_xmf3BoundingMin{ 0.0f, 0.0f, 0.0f };
 	XMFLOAT3 m_xmf3BoundingMax{ 0.0f, 0.0f, 0.0f };
-	// 텍스트 전체 폭 계산에 사용되는 픽셀 단위. 글자 사이 간격은 별도로 관리된다(unit/pixel).
+	// 텍스트 전체 폭 계산에 사용되는 픽셀 단위.
 	float m_fPixelSize = 0.0f;
 
 	void UpdateBoundingBox();

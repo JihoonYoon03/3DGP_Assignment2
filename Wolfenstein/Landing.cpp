@@ -218,7 +218,6 @@ CTextLetterMesh::CTextLetterMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 	m_d3dIndexBufferView.Format = DXGI_FORMAT_R32_UINT;
 	m_d3dIndexBufferView.SizeInBytes = sizeof(UINT) * m_nIndices;
 
-	// 텍스트 정점 노멀: 셰이더가 NORMAL slot 을 요구하므로 +Y 방향으로 채워 가독성 유지
 	std::vector<CNormalVertex> vNormals(m_nVertices, CNormalVertex(0.0f, 1.0f, 0.0f));
 	const UINT normalStride = sizeof(CNormalVertex);
 	m_pd3dNormalBuffer = ::CreateBufferResource(
@@ -226,6 +225,7 @@ CTextLetterMesh::CTextLetterMesh(ID3D12Device* pd3dDevice, ID3D12GraphicsCommand
 		vNormals.data(), normalStride * m_nVertices,
 		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
 		m_pd3dNormalUploadBuffer.GetAddressOf());
+
 	m_d3dNormalBufferView.BufferLocation = m_pd3dNormalBuffer->GetGPUVirtualAddress();
 	m_d3dNormalBufferView.StrideInBytes  = normalStride;
 	m_d3dNormalBufferView.SizeInBytes    = normalStride * m_nVertices;
@@ -263,6 +263,8 @@ void CLetterObject::Animate(float fTimeElapsed) {
 	CGameObject::Animate(fTimeElapsed);
 }
 
+// ============================================================================
+// ============================================================================
 CTextStringObject::CTextStringObject() : CGameObject() {
 }
 
@@ -328,7 +330,7 @@ void CTextStringObject::UpdateBoundingBox() {
 		if (pos.z > m_xmf3BoundingMax.z) m_xmf3BoundingMax.z = pos.z;
 	}
 
-	// CTextLetterMesh 가 시작점 (px, py) 에서 +X 방향으로 LETTER_GRID_COLS * pixelSize 폭,
+	// CTextLetterMesh 가 시작점(px, py) 에서 +X 방향으로 LETTER_GRID_COLS * pixelSize 폭,
 	// -Y 방향으로 LETTER_GRID_ROWS * pixelSize 깊이로 글자를 그린다.
 	// 전체 문자열 너비 계산 시에는 글자 사이 일정 픽셀 간격을 끼워 넣는다.
 	const float fGlyphW = m_fPixelSize * static_cast<float>(LETTER_GRID_COLS);
@@ -337,6 +339,8 @@ void CTextStringObject::UpdateBoundingBox() {
 	m_xmf3BoundingMin.y -= fGlyphH;
 }
 
+// ============================================================================
+// ============================================================================
 CButtonObject::CButtonObject() : CTextStringObject() {
 }
 
@@ -354,7 +358,7 @@ XMFLOAT3 CButtonObject::UnprojectScreenToWorld(int nMouseX, int nMouseY, int nSc
 	// inverse(view * proj) 로 클립 공간 좌표를 월드 공간 좌표로 되돌린다.
 	XMMATRIX xmInvViewProj = XMMatrixInverse(nullptr, XMMatrixMultiply(xmView, xmProj));
 
-	// 근평면(z=0) 과 원평면(z=1) 양쪽 점을 각각 월드 공간 좌표로 환산한 뒤 그 차를 광선 방향으로 삼는다.
+	// 근평면과 원평면 양쪽 점을 각각 월드 공간 좌표로 바꾼 뒤 그 차를 광선 방향으로 삼는다.
 	XMVECTOR vClipNear = XMVectorSet(fNDCX, fNDCY, 0.0f, 1.0f);
 	XMVECTOR vClipFar  = XMVectorSet(fNDCX, fNDCY, 1.0f, 1.0f);
 	XMVECTOR vWorldNear = XMVector4Transform(vClipNear, xmInvViewProj);
@@ -362,7 +366,7 @@ XMFLOAT3 CButtonObject::UnprojectScreenToWorld(int nMouseX, int nMouseY, int nSc
 	XMVECTOR vWorldFar  = XMVector4Transform(vClipFar,  xmInvViewProj);
 	vWorldFar  = XMVectorScale(vWorldFar,  1.0f / XMVectorGetW(vWorldFar));
 
-	// 광 원점이 z=0 평면과 만나는 위치를 구함. 광선 방향의 월드 z=0 면 교점이 클릭 좌표가 된다.
+	// 광선 원점이 z=0 평면과 만나는 위치를 구함. 광선 방향의 월드 z=0 면 교점이 클릭 좌표가 된다.
 	XMVECTOR vDir = XMVectorSubtract(vWorldFar, vWorldNear);
 	float fDirZ  = XMVectorGetZ(vDir);
 	float fNearZ = XMVectorGetZ(vWorldNear);

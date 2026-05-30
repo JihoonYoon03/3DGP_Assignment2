@@ -1,4 +1,4 @@
-// 게임 객체의 정보를 위한 상수 버퍼 선언
+// 게임 객체의 정보를 위한 상수 버퍼
 cbuffer cbGameObjectInfo : register(b0)
 {
     matrix gmtxWorld : packoffset(c0);
@@ -10,7 +10,7 @@ cbuffer cbCameraInfo : register(b1)
     matrix gmtxProjection : packoffset(c4);
 };
 
-// 라이트 상수 (방향광 + 환경광, 16 byte 정렬 패딩 포함)
+// 방향광 + 환경광, 16바이트 정렬 패딩
 cbuffer cbLightInfo : register(b2)
 {
     float3 gLightDirWorld : packoffset(c0);
@@ -46,17 +46,16 @@ VS_OUTPUT VSDiffused(VS_INPUT input)
 {
     VS_OUTPUT output;
 
-    // 월드 → 뷰 → 투영
+    // WVP
     output.position = mul(mul(mul(float4(input.position, 1.0f), gmtxWorld), gmtxView), gmtxProjection);
 
-    // 노멀을 월드 공간으로 변환 (균등 스케일/회전 가정)
+    // 노멀을 월드 공간으로 변환
     output.normalWorld = mul(input.normal, (float3x3) gmtxWorld);
 
     output.color = input.color;
     return output;
 }
 
-// 픽셀 셰이더 (Lambert 디퓨즈 + 환경광)
 float4 PSDiffused(VS_OUTPUT input) : SV_TARGET
 {
     float3 N = normalize(input.normalWorld);

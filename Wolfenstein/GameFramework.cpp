@@ -334,7 +334,7 @@ void CGameFramework::BuildObjects()
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		1.2f, 2.6f, 1.2f, true, XMFLOAT4(0.45f, 0.15f, 0.55f, 1.0f));
 
-	// 플레이어용 M16 소총 메시. 모델 좌표계를 엔진 좌표계에 맞추는 베이크 변환을 적용한다.
+	// M16 매쉬
 	XMFLOAT4X4 m16Xform;
 	XMStoreFloat4x4(&m16Xform,
 		XMMatrixTranslation(1.815f, -0.17f, 0.0f) *
@@ -355,7 +355,7 @@ void CGameFramework::BuildObjects()
 	}
 	m_pPlayer->SetPosition(XMFLOAT3{ 0.0f, MAP_EYE_HEIGHT, 0.0f });
 
-	// 적용 AK47 소총 메시
+	// AK47 매쉬
 	XMFLOAT4X4 ak47Xform;
 	XMStoreFloat4x4(&ak47Xform,
 		XMMatrixTranslation(0.02f, 0.14f, 0.0f) *
@@ -367,7 +367,7 @@ void CGameFramework::BuildObjects()
 		XMFLOAT4(0.20f, 0.20f, 0.22f, 1.0f),
 		ak47Xform);
 
-	// 적 머리 위 노란 마커 기둥 메시
+	// 적 머리 위 노란 마커 기둥 매쉬
 	m_pEnemyMarkerMesh = std::make_shared<CCubeMeshDiffused>(
 		m_pd3dDevice.Get(), m_pd3dCommandList.Get(),
 		0.15f, 14.0f, 0.15f, true, XMFLOAT4(1.0f, 0.85f, 0.1f, 1.0f));
@@ -449,7 +449,7 @@ void CGameFramework::BuildObjects()
 		}
 	}
 
-	// 승리 시 표시되는 'WIN' 글자를 NDC 사각 막대 조합으로 만든다
+	// 'WIN' 글자 조합
 	{
 		const float wPx = float(m_nWndClientWidth  > 0 ? m_nWndClientWidth  : 1);
 		const float hPx = float(m_nWndClientHeight > 0 ? m_nWndClientHeight : 1);
@@ -480,7 +480,7 @@ void CGameFramework::BuildObjects()
 			m_pWinLetters.push_back(std::move(pObj));
 		};
 
-		// W 글자
+		// W
 		{
 			const float L = startXPx;
 			const float R = L + kLetterW;
@@ -492,7 +492,7 @@ void CGameFramework::BuildObjects()
 			addQuad(midX - kStroke * 0.5f, midX + kStroke * 0.5f, B - kLetterH * 0.55f, B);
 			addQuad(L, R, B - kStroke, B);
 		}
-		// I 글자
+		// I
 		{
 			const float L = startXPx + kLetterW + kLetterGap;
 			const float R = L + kLetterW;
@@ -503,7 +503,7 @@ void CGameFramework::BuildObjects()
 			addQuad(L + kStroke, R - kStroke, T, T + kStroke);
 			addQuad(L + kStroke, R - kStroke, B - kStroke, B);
 		}
-		// N 글자
+		// N
 		{
 			const float L = startXPx + (kLetterW + kLetterGap) * 2.0f;
 			const float R = L + kLetterW;
@@ -569,7 +569,6 @@ void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM
 		int nMouseX = GET_X_LPARAM(lParam);
 		int nMouseY = GET_Y_LPARAM(lParam);
 		if (m_pScene && m_pCamera) {
-			// 게임플레이 씬에서는 좌클릭 = 발사. UI 씬은 씬의 hit-test 경로로.
 			const SceneState st = m_pScene->GetCurrentState();
 			if (st == SceneState::MAP1 || st == SceneState::MAP2) {
 				if (m_fPlayerDeathTimer < 0.0f) FireBullet();
@@ -707,7 +706,7 @@ void CGameFramework::ProcessInput()
 	const SceneState state = m_pScene->GetCurrentState();
 	const bool bGameplay = (state == SceneState::MAP1 || state == SceneState::MAP2);
 	if (!bGameplay) {
-		// LANDING/MAP_SELECT 에서는 마우스만 풀어둔다
+		// LANDING, MAP_SELECT 에서는 마우스만 풀어둔다
 		if (m_bMouseCaptured) {
 			::ShowCursor(TRUE);
 			m_bMouseCaptured = false;
@@ -810,7 +809,7 @@ void CGameFramework::ProcessInput()
 	const float groundY = floorYAtNext + MAP_EYE_HEIGHT;
 
 	if (!m_pPlayer->IsGrounded()) {
-		// 공중: 중력 적용
+		// 공중
 		float vy = m_pPlayer->GetVerticalVelocity() - kGravity * dt;
 		m_pPlayer->SetVerticalVelocity(vy);
 		next.y = pos.y + vy * dt;
@@ -821,7 +820,7 @@ void CGameFramework::ProcessInput()
 		}
 	}
 	else {
-		// 지상: 바닥 높이 추적
+		// 지상
 		next.y = groundY;
 	}
 
@@ -841,7 +840,7 @@ void CGameFramework::ProcessInput()
 		}
 	}
 	else {
-		// TPS: 플레이어 뒤 어깨너머 시점
+		// TPS: 플레이어 뒤쪽 위
 		const float kBack = 3.0f;
 		const float kUp   = 1.2f;
 
@@ -884,6 +883,7 @@ XMFLOAT3 CGameFramework::GetAimTargetPoint() const
 	if (!m_pCamera || !m_pScene) {
 		return XMFLOAT3{ 0.0f, 0.0f, 0.0f };
 	}
+
 	const XMFLOAT3 origin = m_pCamera->GetPosition();
 	const float yaw = m_pCamera->GetYaw();
 	const float pitch = m_pCamera->GetPitch();
@@ -891,7 +891,7 @@ XMFLOAT3 CGameFramework::GetAimTargetPoint() const
 	const XMFLOAT3 dir{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
 	const SceneState st = m_pScene->GetCurrentState();
 
-	// 벽까지의 거리 (수평 마칭으로 측정 후 3D 길이로 환산)
+	// 벽까지의 거리
 	float wallDist = kMaxAimDist;
 	{
 		const float horizLen = sqrtf(dir.x * dir.x + dir.z * dir.z);
@@ -903,12 +903,14 @@ XMFLOAT3 CGameFramework::GetAimTargetPoint() const
 		}
 	}
 
-	// 적 AABB 까지의 거리 (슬랩 라인테스트)
+	// 적 AABB 까지의 거리
 	float enemyDist = kMaxAimDist;
 	if (st == SceneState::MAP1 || st == SceneState::MAP2) {
+
 		const auto enemyAABBs = m_pScene->GetAliveEnemyAABBs();
 		const float o[3] = { origin.x, origin.y, origin.z };
 		const float d[3] = { dir.x,   dir.y,   dir.z };
+
 		for (const auto& cb : enemyAABBs) {
 			const XMFLOAT3& c = cb.first;
 			const XMFLOAT3& h = cb.second;
@@ -917,9 +919,13 @@ XMFLOAT3 CGameFramework::GetAimTargetPoint() const
 			float tmin = 0.0f;
 			float tmax = kMaxAimDist;
 			bool hit = true;
+
 			for (int i = 0; i < 3; ++i) {
 				if (fabsf(d[i]) < 1e-6f) {
-					if (o[i] < bmin[i] || o[i] > bmax[i]) { hit = false; break; }
+					if (o[i] < bmin[i] || o[i] > bmax[i]) {
+						hit = false;
+						break;
+					}
 				}
 				else {
 					float t1 = (bmin[i] - o[i]) / d[i];
@@ -927,10 +933,14 @@ XMFLOAT3 CGameFramework::GetAimTargetPoint() const
 					if (t1 > t2) std::swap(t1, t2);
 					if (t1 > tmin) tmin = t1;
 					if (t2 < tmax) tmax = t2;
-					if (tmin > tmax) { hit = false; break; }
+					if (tmin > tmax) {
+						hit = false;
+						break;
+					}
 				}
 			}
-			if (hit && tmin < enemyDist) enemyDist = tmin;
+			if (hit && tmin < enemyDist)
+				enemyDist = tmin;
 		}
 	}
 
@@ -955,7 +965,7 @@ void CGameFramework::UpdateRifleTransform()
 	const float cp = cosf(pitch);
 	const XMFLOAT3 aim{ sinf(yaw) * cp, sinf(pitch), cosf(yaw) * cp };
 
-	// 발사 후 반동 키프레임 보간 (0.06s 후진, 0.14s 절반 복귀, 0.25s 원위치)
+	// 발사 후 반동 키프레임 보간
 	auto computeRecoilOffset = [this]() -> float {
 		const float fRecoil = m_pPlayer->GetRecoilTimer();
 		if (fRecoil < 0.0f) return 0.0f;
@@ -981,7 +991,7 @@ void CGameFramework::UpdateRifleTransform()
 	XMFLOAT3 pos;
 
 	if (m_pCamera->GetMode() == ECameraMode::FPS) {
-		// FPS: 화면 우측 하단에 어깨총처럼 고정
+		// FPS
 		const XMFLOAT3 camPos   = m_pCamera->GetPosition();
 		const XMFLOAT3 camRight = m_pCamera->GetRight();
 		const float kForward = 0.5f;
@@ -992,7 +1002,7 @@ void CGameFramework::UpdateRifleTransform()
 		pos.z = camPos.z + camRight.z * kSide + aim.z * (kForward + fRecoilOffset);
 	}
 	else {
-		// TPS: 플레이어 모델 우측 어깨 옆
+		// TPS
 		const XMFLOAT3 playerYawRight{ cosf(yaw), 0.0f, -sinf(yaw) };
 		const XMFLOAT3 playerPos = m_pPlayer->GetPosition();
 		const float modelCenterY = playerPos.y - MAP_EYE_HEIGHT + 1.3f;
@@ -1084,16 +1094,15 @@ void CGameFramework::SpawnEnemiesForMap(SceneState state)
 	std::vector<XMFLOAT3> spawns = PickEnemySpawnPositions(state, playerPos, 12, kEnemyHalfY);
 
 	std::mt19937 seedGen{ std::random_device{}() };
+
 	for (const XMFLOAT3& pos : spawns) {
 		const unsigned int nSeed = seedGen();
 		auto pEnemy = std::make_shared<CEnemyObject>(state, nSeed);
 		pEnemy->SetMesh(m_pEnemyMesh);
 		pEnemy->SetPosition(pos);
-		// 적이 발사할 때마다 GameFramework 의 SpawnEnemyBullet 호출
 		pEnemy->SetFireCallback([this](const XMFLOAT3& xmf3Origin, const XMFLOAT3& xmf3Dir) {
 			SpawnEnemyBullet(xmf3Origin, xmf3Dir);
 		});
-		// 시야 판정과 추적용 플레이어 위치 게터
 		pEnemy->SetPlayerPosGetter([this]() {
 			return m_pPlayer ? m_pPlayer->GetPosition() : XMFLOAT3{ 0, 0, 0 };
 		});
@@ -1199,7 +1208,6 @@ void CGameFramework::AnimateObjects()
 void CGameFramework::SetupGameCamera(SceneState state)
 {
 	if (!m_pCamera) return;
-	// 맵에 진입할 때 카메라/플레이어/적 등을 초기화한다
 	MapInfo info;
 	switch (state) {
 	case SceneState::MAP1: info = GetMap1Info(); break;
@@ -1236,7 +1244,6 @@ void CGameFramework::SetupGameCamera(SceneState state)
 void CGameFramework::SetupMapSelectCamera()
 {
 	if (!m_pCamera) return;
-	// 맵 선택 화면 카메라: 미니어처들이 보이도록 멀리서 잡는다
 	m_pCamera->GenerateViewMatrix(
 		XMFLOAT3(0.0f, 5.0f, -55.0f),
 		XMFLOAT3(0.0f, 0.0f, 0.0f),

@@ -1,6 +1,5 @@
 #pragma once
 
-// 정점 기본 클래스 (위치)
 class CVertex {
 protected:
 	XMFLOAT3 m_xmf3Position;
@@ -11,7 +10,6 @@ public:
 	~CVertex() {}
 };
 
-// 색상 정점
 class CDiffusedVertex : public CVertex {
 protected:
 	XMFLOAT4 m_xmf4Diffuse;
@@ -34,7 +32,6 @@ public:
 	~CDiffusedVertex() {}
 };
 
-// 노멀 전용 정점 (slot 1 에 분리 바인딩)
 class CNormalVertex {
 public:
 	XMFLOAT3 m_xmf3Normal;
@@ -56,8 +53,6 @@ protected:
 	ComPtr<ID3D12Resource>		m_pd3dVertexUploadBuffer;
 	ComPtr<ID3D12Resource>		m_pd3dIndexBuffer;
 	ComPtr<ID3D12Resource>		m_pd3dIndexUploadBuffer;
-
-	// 노멀 병렬 버퍼 (slot 1)
 	ComPtr<ID3D12Resource>		m_pd3dNormalBuffer;
 	ComPtr<ID3D12Resource>		m_pd3dNormalUploadBuffer;
 	bool					m_bHasNormals = false;
@@ -91,7 +86,6 @@ public:
 class CCubeMeshDiffused : public CMesh
 {
 public:
-	// 가로/세로/깊이를 지정한 직육면체 메시
 	CCubeMeshDiffused(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 		float fWidth = 2.0f, float fHeight = 2.0f, float fDepth = 2.0f,
 		bool bUseUniformColor = false,
@@ -99,7 +93,7 @@ public:
 	virtual ~CCubeMeshDiffused();
 };
 
-// 여러 큐브를 한 정점/인덱스 버퍼로 통합한 정적 메시 (드로우 콜 절감용)
+// 여러 큐브를 한 정점/인덱스 버퍼로 통합한 메시
 class CMergedCubeMesh : public CMesh
 {
 public:
@@ -114,8 +108,7 @@ public:
 	virtual ~CMergedCubeMesh() = default;
 };
 
-// Wavefront .obj 파일 로더. 면 단위 평탄 음영(flat shading)으로 노멀을 분리한다.
-// xmf4x4ModelTransform 으로 모델 좌표계 → 엔진 좌표계 변환을 정점/노멀에 베이크.
+// Wavefront .obj 파일 로더
 class CObjMesh : public CMesh
 {
 public:
@@ -126,7 +119,7 @@ public:
 	virtual ~CObjMesh() = default;
 };
 
-// 화면 정중앙 십자선(+) 메시. 정점이 NDC 좌표로 저장됨.
+// 크로스헤어 메시
 class CCrosshairMesh : public CMesh
 {
 public:
@@ -137,7 +130,7 @@ public:
 	virtual ~CCrosshairMesh();
 };
 
-// 라이프 바 칸 한 개 메시. 한 인스턴스가 한 칸을 표현 (NDC 좌표).
+// 체력바 한 칸 메시
 class CLifeBarMesh : public CMesh
 {
 public:
@@ -150,7 +143,7 @@ public:
 	virtual ~CLifeBarMesh();
 };
 
-// NDC 좌표 직사각형 메시 (적 카운트 점, WIN 글자 세그먼트 등에 공용)
+// NDC 좌표 직사각형 메시
 class CHudQuadMesh : public CMesh
 {
 public:

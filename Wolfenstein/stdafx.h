@@ -56,7 +56,6 @@ extern ComPtr<ID3D12Resource> CreateBufferResource(
 	ID3D12Resource** ppd3dUploadBuffer = NULL
 );
 
-// 3Â÷¿ø º¤ÅÍ ¿¬»ê ÇïÆÛ
 namespace Vector3
 {
 	inline XMFLOAT3 XMVectorToFloat3(const XMVECTOR& xmvVector)
@@ -149,7 +148,6 @@ namespace Vector3
 	}
 }
 
-// 4Â÷¿ø º¤ÅÍ ¿¬»ê ÇïÆÛ
 namespace Vector4
 {
 	inline XMFLOAT4 Add(const XMFLOAT4& xmf4Vector1, const XMFLOAT4& xmf4Vector2)
@@ -172,7 +170,6 @@ namespace Vector4
 	}
 }
 
-// 4x4 Çà·Ä ¿¬»ê ÇïÆÛ
 namespace Matrix4x4
 {
 	inline XMFLOAT4X4 Identity()

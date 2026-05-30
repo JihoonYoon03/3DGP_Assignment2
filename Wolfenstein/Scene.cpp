@@ -92,7 +92,7 @@ void CScene::BuildObjects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* p
 		shader.CreateShader(pd3dDevice, m_pd3dGraphicsRootSignature.Get());
 	}
 
-	// 타이틀(LANDING) 씬 오브젝트
+	// 메인화면 오브젝트
 	{
 		std::vector<std::shared_ptr<CGameObject>> vLandingObjects;
 		BuildLandingObjects(pd3dDevice, pd3dCommandList, vLandingObjects, m_pStartButton);
@@ -156,7 +156,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 		// 게임플레이 씬에서만 충돌 검사
 		if (m_eCurrentState == SceneState::MAP1 || m_eCurrentState == SceneState::MAP2) {
-			// 플레이어 총알 vs 적
+			// 플레이어 총알 - 적
 			Collision::CheckCollisions(
 				m_vShaders[idx].GetObjects(),
 				EObjectTag::Bullet, EObjectTag::Enemy,
@@ -168,7 +168,7 @@ void CScene::AnimateObjects(float fTimeElapsed)
 					b->OnHit(a);
 				});
 
-			// 적 총알 vs 플레이어 (플레이어 모델은 다른 컨테이너에 있어 직접 비교)
+			// 적 총알 - 플레이어
 			if (m_pPlayerModel) {
 				for (auto& pObj : m_vShaders[idx].GetObjects()) {
 					if (!pObj || !pObj->IsAlive()) continue;
@@ -187,7 +187,6 @@ void CScene::AnimateObjects(float fTimeElapsed)
 
 void CScene::ResetGameplayState()
 {
-	// MAP1/MAP2 의 동적 객체(총알/적) 만 제거. 정적 미로 큐브는 보존.
 	for (size_t i : { static_cast<size_t>(SceneState::MAP1), static_cast<size_t>(SceneState::MAP2) }) {
 		if (i >= m_vShaders.size()) continue;
 		const auto& vObjs = m_vShaders[i].GetObjects();
@@ -221,17 +220,23 @@ int CScene::CountAliveEnemies() const
 std::vector<std::pair<XMFLOAT3, XMFLOAT3>> CScene::GetAliveEnemyAABBs() const
 {
 	std::vector<std::pair<XMFLOAT3, XMFLOAT3>> out;
+
 	if (m_eCurrentState != SceneState::MAP1 && m_eCurrentState != SceneState::MAP2) return out;
+
 	const size_t idx = static_cast<size_t>(m_eCurrentState);
+
 	if (idx >= m_vShaders.size()) return out;
+
 	for (const auto& p : m_vShaders[idx].GetObjects()) {
 		if (!p || !p->IsAlive()) continue;
 		if (p->GetTag() != EObjectTag::Enemy) continue;
 		if (static_cast<const CEnemyObject*>(p.get())->IsDying()) continue;
+
 		const XMFLOAT3 c = const_cast<CGameObject*>(p.get())->GetPosition();
 		const XMFLOAT3 h = p->GetAABBHalf();
 		out.emplace_back(c, h);
 	}
+
 	return out;
 }
 
@@ -249,7 +254,7 @@ void CScene::SetEnemyMarkersVisible(bool bVisible)
 }
 
 namespace {
-	// 맵 선택 화면 미니어처 배치용 상수
+	// 맵 선택 화면의 미로 미니어처 배치용 상수
 	constexpr float kMiniOffsetX = 28.0f;
 	constexpr float kMiniScale   = 0.25f;
 	constexpr float kHoverScale  = 1.18f;
@@ -285,7 +290,6 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 	}
 
 	if (m_eCurrentState == SceneState::MAP_SELECT) {
-		// 맵 선택 화면: MAP1, MAP2 미니어처를 좌우에 배치
 		const size_t map1Idx = static_cast<size_t>(SceneState::MAP1);
 		const size_t map2Idx = static_cast<size_t>(SceneState::MAP2);
 
@@ -307,7 +311,7 @@ void CScene::Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera
 		m_vShaders[idx].Render(pd3dCommandList, pCamera);
 	}
 
-	// LANDING 화면: 글자 아래에 맵1 전경 미니어처 추가 렌더
+	// 메인화면의 글자 아래에 맵1 미니어처 추가 렌더
 	if (m_eCurrentState == SceneState::LANDING) {
 		constexpr float kPreviewScale   = 0.18f;
 		constexpr float kPreviewTiltDeg = 0.0f;
@@ -368,7 +372,6 @@ void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nSc
 	if (!pCamera) return;
 
 	if (m_eCurrentState == SceneState::LANDING) {
-		// 시작 버튼 히트 테스트
 		if (!m_pStartButton) return;
 		if (m_bGameStartRequested) return;
 		const XMFLOAT4X4& view = pCamera->GetViewMatrix();
@@ -382,7 +385,6 @@ void CScene::HandleLeftClick(int nMouseX, int nMouseY, int nScreenWidth, int nSc
 	}
 
 	if (m_eCurrentState == SceneState::MAP_SELECT) {
-		// 호버 중인 미니어처를 클릭한 것으로 처리
 		UpdateMapSelectHover(nMouseX, nMouseY, nScreenWidth, nScreenHeight, pCamera);
 		if (m_nHoveredMiniIndex == 0) {
 			m_nRequestedMap = 1;
@@ -416,8 +418,10 @@ void CScene::UpdateMapSelectHover(int nMouseX, int nMouseY, int nScreenWidth, in
 		XMVECTOR vCenter = XMVector3Transform(XMVectorZero(), m);
 		XMVECTOR vCenterH = XMVectorSetW(vCenter, 1.0f);
 		XMVECTOR vClip = XMVector4Transform(vCenterH, matVP);
+		
 		float w = XMVectorGetW(vClip);
 		if (w <= 0.0f) continue;
+
 		float ndcX = XMVectorGetX(vClip) / w;
 		float ndcY = XMVectorGetY(vClip) / w;
 		float sx = (ndcX * 0.5f + 0.5f) * nScreenWidth;
@@ -425,8 +429,8 @@ void CScene::UpdateMapSelectHover(int nMouseX, int nMouseY, int nScreenWidth, in
 		float dx = sx - nMouseX;
 		float dy = sy - nMouseY;
 		float dist = sqrtf(dx * dx + dy * dy);
-		// 화면 폭의 12% 이내면 호버로 인식
 		float radius = nScreenWidth * 0.12f;
+		
 		if (dist < radius && dist < bestDist) {
 			hover = i;
 			bestDist = dist;
@@ -456,7 +460,7 @@ void CScene::TransitionToScene(SceneState newState)
 {
 	if (m_eCurrentState == newState) return;
 	m_eCurrentState = newState;
-	::OutputDebugStringA("[Scene] Transitioned to new scene.\n");
+	::OutputDebugStringA("Transitioned to new scene.\n");
 }
 
 CScene::~CScene()

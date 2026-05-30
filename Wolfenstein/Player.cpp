@@ -6,7 +6,6 @@ CPlayer::CPlayer()
 {
 	m_eTag = EObjectTag::Player;
 	m_nHP = 10;
-	// 플레이어 AABB (이동은 반경 기반 프로브를 쓰므로 충돌엔 직접 안 쓰임)
 	m_xmf3AABBHalf = XMFLOAT3(1.0f, MAP_EYE_HEIGHT * 0.5f, 1.0f);
 }
 

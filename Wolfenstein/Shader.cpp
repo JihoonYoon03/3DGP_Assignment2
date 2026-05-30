@@ -208,7 +208,7 @@ CPlayerShader::~CPlayerShader()
 
 D3D12_INPUT_LAYOUT_DESC CPlayerShader::CreateInputLayout()
 {
-	// POSITION/COLOR 는 slot 0, NORMAL 은 slot 1 의 병렬 정점 버퍼에서 읽는다.
+	// POSITION/COLOR는 slot 0, NORMAL은 slot 1에서 읽는다.
 	UINT nInputElementDescs = 3;
 	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
 	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
@@ -239,7 +239,6 @@ void CPlayerShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* 
 
 
 // ====================================================================================
-// CHudShader : 화면 정중앙 고정 십자선(+) 조준점 셰이더
 // ====================================================================================
 CHudShader::CHudShader()
 {
@@ -261,8 +260,7 @@ D3D12_INPUT_LAYOUT_DESC CHudShader::CreateInputLayout()
 	return d3dInputLayoutDesc;
 }
 
-// 십자선은 양면 모두 보이도록 컬링을 끈다. NDC 좌표를 직접 쓰는 메시는
-// 와인딩 방향에 신경 쓰지 않고도 항상 렌더되어야 한다.
+// 십자선은 양면 모두 보이도록 컬링을 끈다. NDC 좌표를 직접 쓰는 메시는 항상 렌더되어야 한다.
 D3D12_RASTERIZER_DESC CHudShader::CreateRasterizerState()
 {
 	D3D12_RASTERIZER_DESC d3dRasterizerDesc;
@@ -321,7 +319,6 @@ void CHudShader::CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3
 
 
 // ====================================================================================
-// CHitOverlayShader : 피격 비네트 오버레이 (NDC 풀스크린 쿼드 + alpha blend)
 // ====================================================================================
 CHitOverlayShader::CHitOverlayShader()
 {
@@ -333,7 +330,7 @@ CHitOverlayShader::~CHitOverlayShader()
 
 D3D12_INPUT_LAYOUT_DESC CHitOverlayShader::CreateInputLayout()
 {
-	// HUD 와 동일한 POSITION + COLOR 레이아웃 (COLOR 는 사용 안 함)
+	// HUD와 동일한 POSITION + COLOR레이아웃 (COLOR는 사용 안 함)
 	UINT nInputElementDescs = 2;
 	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
 	pd3dInputElementDescs[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT,    0, 0,  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
@@ -467,7 +464,6 @@ void CObjectsShader::ReleaseObjects()
 void CObjectsShader::AnimateObjects(float fTimeElapsed)
 {
 	// 적이 발사 콜백으로 m_vObjects 에 총알을 push_back 하므로 재할당 대비.
-	// 시작 시점 크기를 스냅샷으로 잡고, 매 반복마다 shared_ptr 사본을 잡아 무효화 방지.
 	const size_t nCount = m_vObjects.size();
 	for (size_t i = 0; i < nCount; ++i) {
 		std::shared_ptr<CGameObject> pObject = m_vObjects[i];
@@ -488,7 +484,7 @@ void CObjectsShader::PruneDead()
 
 D3D12_INPUT_LAYOUT_DESC CObjectsShader::CreateInputLayout()
 {
-	// POSITION/COLOR 는 slot 0, NORMAL 은 slot 1 의 병렬 정점 버퍼에서 읽는다.
+	// POSITION/COLOR는 slot 0, NORMAL은 slot 1의 정점 버퍼에.
 	UINT nInputElementDescs = 3;
 	D3D12_INPUT_ELEMENT_DESC* pd3dInputElementDescs = new D3D12_INPUT_ELEMENT_DESC[nInputElementDescs];
 

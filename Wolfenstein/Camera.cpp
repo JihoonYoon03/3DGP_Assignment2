@@ -39,7 +39,7 @@ void CCamera::GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlane
 
 void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up)
 {
-	// 카메라 초기 위치/방향 셋업
+	// 카메라 초기 위치, 방향 셋업
 	m_xmf3Position = xmf3Position;
 
 	XMVECTOR vPos = XMLoadFloat3(&xmf3Position);
@@ -54,7 +54,7 @@ void CCamera::GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMF
 	XMStoreFloat3(&m_xmf3Right, vRight);
 	XMStoreFloat3(&m_xmf3Up, vUp);
 
-	// look 벡터에서 yaw/pitch 역산 (이후 Rotate 누적용)
+	// look 벡터에서 yaw/pitch 구하기 (이후 Rotate 누적용)
 	m_fPitch = asinf(m_xmf3Look.y);
 	m_fYaw = atan2f(m_xmf3Look.x, m_xmf3Look.z);
 
@@ -80,7 +80,7 @@ void CCamera::Rotate(float fPitchDelta, float fYawDelta)
 	m_fPitch += fPitchDelta;
 	m_fYaw += fYawDelta;
 
-	// pitch 는 89도로 제한 (시야 뒤집힘 방지)
+	// pitch 는 89도로 제한
 	const float kPitchLimit = XMConvertToRadians(89.0f);
 	if (m_fPitch > kPitchLimit) m_fPitch = kPitchLimit;
 	if (m_fPitch < -kPitchLimit) m_fPitch = -kPitchLimit;
@@ -95,13 +95,12 @@ void CCamera::Rotate(float fPitchDelta, float fYawDelta)
 
 void CCamera::RegenerateViewMatrix()
 {
-	// Pitch/Yaw 로부터 look 벡터를 만들고 right/up 도 재계산
+	// Pitch/Yaw로부터 look벡터를 만들고 right/up 재계산
 	const float cp = cosf(m_fPitch);
 	const float sp = sinf(m_fPitch);
 	const float cy = cosf(m_fYaw);
 	const float sy = sinf(m_fYaw);
 
-	// Left-Handed: +Z = forward
 	m_xmf3Look = XMFLOAT3(sy * cp, sp, cy * cp);
 
 	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -128,7 +127,6 @@ void CCamera::CreateShaderVariables(ID3D12Device* pd3dDevice, ID3D12GraphicsComm
 
 void CCamera::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandList)
 {
-	// row-major → column-major 전치 후 b1 슬롯에 업로드
 	XMFLOAT4X4 xmf4x4View;
 	XMStoreFloat4x4(&xmf4x4View, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4View)));
 	pd3dCommandList->SetGraphicsRoot32BitConstants(1, 16, &xmf4x4View, 0);

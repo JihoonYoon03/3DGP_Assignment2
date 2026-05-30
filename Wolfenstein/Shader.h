@@ -61,7 +61,7 @@ public:
 	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature);
 };
 
-// 화면 고정 HUD 셰이더 (정점이 NDC 직접 좌표, 깊이/컬링 OFF)
+// 화면 고정 HUD 셰이더
 class CHudShader : public CShader
 {
 public:
@@ -78,7 +78,7 @@ public:
 	virtual void CreateShader(ID3D12Device* pd3dDevice, ID3D12RootSignature* pd3dGraphicsRootSignature);
 };
 
-// 피격 비네트 오버레이 셰이더 (HUD 골격 + 알파 블렌드)
+// 피격 비네트 셰이더
 class CHitOverlayShader : public CShader
 {
 public:
@@ -115,16 +115,14 @@ public:
 	virtual void ReleaseUploadBuffers();
 
 	virtual void Render(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera);
-	// 미니어처 변환을 위해 부모 행렬을 받아 자식을 렌더링한다.
 	virtual void RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, CCamera* pCamera, const XMFLOAT4X4& xmf4x4Parent);
 
 	void SetObjects(std::vector<std::shared_ptr<CGameObject>>&& v) { m_vObjects = std::move(v); }
 
-	// 충돌 검사에서 참조용 (복사 없이 컨테이너 접근)
 	const std::vector<std::shared_ptr<CGameObject>>& GetObjects() const { return m_vObjects; }
-	// 런타임 객체 추가 (총알 등)
+	
 	void AddObject(std::shared_ptr<CGameObject> pObject) { m_vObjects.push_back(std::move(pObject)); }
-	// IsAlive()==false 인 객체를 제거
+	
 	void PruneDead();
 
 protected:

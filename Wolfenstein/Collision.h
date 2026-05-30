@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-// 태그 기반 AABB 충돌 검사 헬퍼.
+// enum 기반 AABB 충돌 검사.
 // tagA × tagB 의 모든 쌍에 대해 AABB 가 겹치면 cb 콜백을 호출한다.
 // tagA == tagB 일 때는 unordered 쌍을 한 번씩만 보고한다.
 namespace Collision {
@@ -61,4 +61,4 @@ namespace Collision {
 		}
 	}
 
-} // namespace Collision
+}

@@ -11,7 +11,7 @@ CGameObject::CGameObject()
 
 CGameObject::~CGameObject()
 {
-	// 셰이더 자원은 shared_ptr 의 마지막 참조가 풀릴 때 해제되므로 여기서 호출 안 함.
+
 }
 
 void CGameObject::SetShader(std::shared_ptr<CShader> pShader)
@@ -43,7 +43,7 @@ void CGameObject::RenderInParent(ID3D12GraphicsCommandList* pd3dCommandList, CCa
 {
 	OnPrepareRender();
 
-	// (로컬 * 부모) 전치를 b0 슬롯에 업로드
+	// b0 슬롯에 업로드
 	XMMATRIX mtxLocal = XMLoadFloat4x4(&m_xmf4x4World);
 	XMMATRIX mtxParent = XMLoadFloat4x4(&xmf4x4Parent);
 	XMMATRIX mtxCombined = XMMatrixMultiply(mtxLocal, mtxParent);
@@ -74,7 +74,6 @@ void CGameObject::UpdateShaderVariables(ID3D12GraphicsCommandList* pd3dCommandLi
 {
 	XMFLOAT4X4 xmf4x4World;
 	XMStoreFloat4x4(&xmf4x4World, XMMatrixTranspose(XMLoadFloat4x4(&m_xmf4x4World)));
-	// 월드 행렬의 전치를 루트 상수로 업로드
 	pd3dCommandList->SetGraphicsRoot32BitConstants(0, 16, &xmf4x4World, 0);
 }
 
@@ -155,7 +154,7 @@ void CGameObject::Rotate(float fPitch, float fYaw, float fRoll)
 
 void CGameObject::SetWorldYawAndPosition(float fYaw, const XMFLOAT3& xmf3Position)
 {
-	// Y 회전 + 이동 (회전 누적 없이 직접 갱신)
+	// Yaw 회전 + 이동
 	XMMATRIX mRot = XMMatrixRotationY(fYaw);
 	XMMATRIX mTr  = XMMatrixTranslation(xmf3Position.x, xmf3Position.y, xmf3Position.z);
 	XMStoreFloat4x4(&m_xmf4x4World, XMMatrixMultiply(mRot, mTr));
@@ -163,10 +162,8 @@ void CGameObject::SetWorldYawAndPosition(float fYaw, const XMFLOAT3& xmf3Positio
 
 void CGameObject::SetWorldOrientation(const XMFLOAT3& xmf3Forward, const XMFLOAT3& xmf3Position)
 {
-	// row-major: 1행 right, 2행 up, 3행 forward, 4행 position
 	XMVECTOR vFwd = XMVector3Normalize(XMLoadFloat3(&xmf3Forward));
 
-	// world-up 후보. forward 와 거의 평행하면 +Z 를 보조 up 으로 사용
 	XMVECTOR vWorldUp = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 	if (fabsf(XMVectorGetX(XMVector3Dot(vFwd, vWorldUp))) > 0.99f) {
 		vWorldUp = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
@@ -188,6 +185,8 @@ void CGameObject::SetWorldOrientation(const XMFLOAT3& xmf3Forward, const XMFLOAT
 	m_xmf4x4World._44 = 1.0f;
 }
 
+// ============================================================================
+// ============================================================================
 CRotatingObject::CRotatingObject()
 {
 	m_xmf3RotationAxis = XMFLOAT3(0.0f, 1.0f, 0.0f);
@@ -203,7 +202,8 @@ void CRotatingObject::Animate(float fTimeElapsed)
 	CGameObject::Rotate(&m_xmf3RotationAxis, m_fRotationSpeed * fTimeElapsed);
 }
 
-// CBulletObject: 플레이어 총알과 적 총알을 같은 클래스로 표현 (eTag 로 구분)
+// ============================================================================
+// ============================================================================
 CBulletObject::CBulletObject(const XMFLOAT3& xmf3Start, const XMFLOAT3& xmf3Dir, float fSpeed,
 	EObjectTag eTag)
 	: m_eSceneState(static_cast<SceneState>(0))
@@ -233,7 +233,7 @@ void CBulletObject::Animate(float fTimeElapsed)
 	m_fLife -= fTimeElapsed;
 	if (m_fLife <= 0.0f) { m_bAlive = false; return; }
 
-	// 벽에 부딪히거나 단차 옆면에 닿으면 사망
+	// 벽에 부딪히거나 단차 옆면에 닿으면 제거
 	if (IsBlockedInMap(m_eSceneState, pos.x, pos.z, pos.y + 1000.0f)) {
 		m_bAlive = false;
 		return;
@@ -244,7 +244,8 @@ void CBulletObject::Animate(float fTimeElapsed)
 	}
 }
 
-// CCharacter
+// ============================================================================
+// ============================================================================
 CCharacter::CCharacter()
 {
 }
@@ -283,7 +284,7 @@ void CCharacter::OnHit(CGameObject* /*pOther*/)
 
 void CCharacter::TryMoveXZ(const XMFLOAT3& xmf3Dir, float fStep, float fRadius)
 {
-	// X/Z 축 분리 프로브 이동. 한 축이 막혀도 다른 축은 통과시켜 벽에 미끄러지듯 이동.
+	// X/Z 축 분리 이동. 한 축이 막혀도 다른 축은 통과시켜 벽에 미끄러지듯 이동.
 	XMFLOAT3 pos = GetPosition();
 	const float kFeetY = pos.y - m_xmf3AABBHalf.y;
 	const float kGravity = 20.0f;
@@ -358,7 +359,8 @@ void CCharacter::TickJumpCooldown(float fTimeElapsed)
 	if (m_fJumpCooldown > 0.0f) m_fJumpCooldown -= fTimeElapsed;
 }
 
-// CEnemyObject
+// ============================================================================
+// ============================================================================
 namespace {
 	// 사망 애니메이션 타이밍
 	constexpr float kEnemyDeathPauseDuration = 0.2f;
@@ -451,11 +453,11 @@ void CEnemyObject::Animate(float fTimeElapsed)
 {
 	if (!m_bAlive) return;
 
-	// 사망 애니메이션 진행 (AI/이동/사격 모두 스킵)
+	// 사망 애니메이션 진행 (다른 동작 모두 스킵)
 	if (IsDying()) {
 		m_fDeathTimer -= fTimeElapsed;
 
-		// 회전 진행률 (0=정지구간, 1=완전히 누움)
+		// 회전 진행률
 		float tipNormalized;
 		if (m_fDeathTimer > kEnemyDeathTipDuration) {
 			tipNormalized = 0.0f;
@@ -481,7 +483,7 @@ void CEnemyObject::Animate(float fTimeElapsed)
 		matFinal.r[3] = XMVectorSet(pos.x, pos.y, pos.z, 1.0f);
 		XMStoreFloat4x4(&m_xmf4x4World, matFinal);
 
-		// 소총도 본체에 강체 부착된 것처럼 같이 회전·하강
+		// 소총도 본체와 같이 변환
 		if (m_pRifle) {
 			XMMATRIX matRifleLocal = XMLoadFloat4x4(&m_xmf4x4DeathRifleLocal);
 			XMFLOAT4X4 xmf4x4Rifle;
@@ -497,7 +499,8 @@ void CEnemyObject::Animate(float fTimeElapsed)
 
 	if (!m_fnGetPlayer) return;
 
-	// 타이머 감산
+
+	// 내부 타이머 갱신
 	if (m_fStateTimer > 0.0f) m_fStateTimer -= fTimeElapsed;
 	if (m_fFireCooldown > 0.0f) m_fFireCooldown -= fTimeElapsed;
 	if (m_fAimFreeze > 0.0f) m_fAimFreeze -= fTimeElapsed;
@@ -559,7 +562,6 @@ void CEnemyObject::Animate(float fTimeElapsed)
 				m_fStateTimer = RandFloat(1.0f, 2.0f);
 			}
 			else {
-				// 모든 방향 막힘 → 잠깐 더 정지
 				m_fStateTimer = RandFloat(1.0f, 2.0f);
 			}
 		}
@@ -567,7 +569,7 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	}
 	case EEnemyAIState::Pursue:
 	{
-		// 플레이어 방향 단위 벡터 (XZ)
+		// 플레이어 방향 단위 벡터
 		XMFLOAT3 dir{ playerPos.x - myPos.x, 0.0f, playerPos.z - myPos.z };
 		const float len = sqrtf(dir.x * dir.x + dir.z * dir.z);
 		if (len > 1e-5f) {
@@ -601,12 +603,12 @@ void CEnemyObject::Animate(float fTimeElapsed)
 				}
 			}
 
-			// facing 결정: 시야 통하면 플레이어를, 막혀 있으면 이동 방향을 향함
+			// 시야 통하면 플레이어를, 막혀 있으면 이동 방향을 향함
 			const bool bLos = HasLineOfSight(m_eSceneState, myPos, playerPos, MAP_EYE_HEIGHT);
 			m_xmf3FacingDir = bLos ? dir : moveDir;
 			SetWorldOrientation(m_xmf3FacingDir, GetPosition());
 
-			// 발사 직후엔 잠시 정지 (조준 연출)
+			// 사격 직후 잠시 정지
 			if (m_fAimFreeze <= 0.0f) {
 				TryMoveXZ(moveDir, kStep);
 			}
@@ -629,14 +631,21 @@ void CEnemyObject::Animate(float fTimeElapsed)
 						myPos.y + 0.2f,
 						myPos.z + dir.z * 0.8f };
 				}
-				// 플레이어 몸통 중앙을 목표로 발사 방향 재계산 (머리 위로 빗나가지 않도록)
+
+				// 플레이어 몸통 중앙을 목표로 발사 방향 계산
 				const float kPlayerBodyCenterY = playerPos.y - MAP_EYE_HEIGHT + 1.3f;
 				XMFLOAT3 fireDir{ playerPos.x - muzzle.x,
 				                  kPlayerBodyCenterY - muzzle.y,
 				                  playerPos.z - muzzle.z };
 				const float fl = sqrtf(fireDir.x * fireDir.x + fireDir.y * fireDir.y + fireDir.z * fireDir.z);
-				if (fl > 1e-5f) { fireDir.x /= fl; fireDir.y /= fl; fireDir.z /= fl; }
-				else            { fireDir = dir; }
+
+				if (fl > 1e-5f) {
+					fireDir.x /= fl; fireDir.y /= fl; fireDir.z /= fl; 
+				}
+				else {
+					fireDir = dir;
+				}
+
 				m_fnFire(muzzle, fireDir);
 				m_fFireCooldown = RandFloat(2.0f, 3.0f);
 				m_fAimFreeze = 0.3f;
@@ -646,14 +655,14 @@ void CEnemyObject::Animate(float fTimeElapsed)
 	}
 	}
 
-	// 머리 위 마커 위치 동기화
+	// 마커 위치 동기화
 	if (m_pMarker) {
 		XMFLOAT3 markerPos = GetPosition();
 		markerPos.y += m_xmf3AABBHalf.y + 7.0f;
 		m_pMarker->SetPosition(markerPos);
 	}
 
-	// 소총 위치 동기화 (본체 facing 의 우측 어깨, 가슴 높이)
+	// 소총 위치 동기화
 	if (m_pRifle) {
 		const XMFLOAT3 myPos = GetPosition();
 		const XMFLOAT3& facing = m_xmf3FacingDir;
@@ -668,17 +677,16 @@ void CEnemyObject::Animate(float fTimeElapsed)
 
 void CEnemyObject::OnHit(CGameObject* pOther)
 {
-	// 사망 애니메이션 도입에 따라 즉시 Kill 대신 사망 타이머 시작
 	if (IsDying()) return;
 	if (m_nHP > 0) m_nHP -= 1;
 	if (m_nHP <= 0) {
 		m_nHP = 0;
-		// 사망 애니메이션 시작 (Kill 호출 안 함 → 렌더/Animate 유지)
+		// 사망 애니메이션 시작
 		m_fDeathTimer          = kEnemyDeathTotalDuration;
 		m_xmf4x4DeathBaseWorld = m_xmf4x4World;
 		m_xmf3DeathTipAxis     = GetLook();
 		m_fDeathBaseY          = GetPosition().y;
-		// 사망 시점 소총의 본체-로컬 행렬 캐시
+
 		if (m_pRifle) {
 			XMMATRIX matRifleWorld = XMLoadFloat4x4(&m_pRifle->GetWorldMatrixRef());
 			XMMATRIX matBodyWorld  = XMLoadFloat4x4(&m_xmf4x4World);
@@ -687,13 +695,14 @@ void CEnemyObject::OnHit(CGameObject* pOther)
 			XMStoreFloat4x4(&m_xmf4x4DeathRifleLocal,
 				XMMatrixMultiply(matRifleWorld, matBodyInv));
 		}
+
 		m_bMarkerVisible = false;
 	}
 }
 
 void CEnemyObject::SetMarkerMesh(std::shared_ptr<CMesh> pMesh)
 {
-	// 마커는 적과 별개의 객체. Animate 에서 위치 동기화.
+	// 마커는 적과 별개의 객체, Animate 에서 위치 동기화.
 	m_pMarker = std::make_shared<CGameObject>();
 	m_pMarker->SetMesh(std::move(pMesh));
 }

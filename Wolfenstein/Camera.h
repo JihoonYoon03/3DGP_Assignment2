@@ -2,14 +2,12 @@
 
 constexpr float ASPECT_RATIO = FRAME_BUFFER_WIDTH / FRAME_BUFFER_HEIGHT;
 
-// Vertex Shader Const Buffer Info
 struct VS_CB_CAMERA_INFO
 {
 	XMFLOAT4X4 m_xmf4x4View;
 	XMFLOAT4X4 m_xmf4x4Projection;
 };
 
-// 카메라 시점 모드 (FPS=1인칭, TPS=3인칭 어깨너머)
 enum class ECameraMode { FPS, TPS };
 
 class CCamera {
@@ -44,7 +42,6 @@ public:
 
 	void GenerateViewMatrix(XMFLOAT3 xmf3Position, XMFLOAT3 xmf3LookAt, XMFLOAT3 xmf3Up);
 
-	// 1인칭 이동 / 회전 API.
 	void Move(const XMFLOAT3& xmf3Shift);
 	void SetPosition(const XMFLOAT3& xmf3Position);
 	void Rotate(float fPitchDelta, float fYawDelta);
@@ -56,7 +53,7 @@ public:
 	float GetYaw() const { return m_fYaw; }
 	float GetPitch() const { return m_fPitch; }
 
-	// TPS 전용: pos 에서 target 을 바라보도록 뷰 행렬만 재생성 (yaw/pitch 는 유지)
+	// TPS 전용: pos에서 target을 바라보도록 뷰 행렬만 재생성 (yaw/pitch는 유지)
 	void SetPositionAndTarget(const XMFLOAT3& pos, const XMFLOAT3& target);
 	void GenerateProjectionMatrix(float fNearPlaneDistance, float fFarPlaneDistance, float fAspectRatio, float fFOVAngle);
 
@@ -68,7 +65,6 @@ public:
 	const XMFLOAT4X4& GetViewMatrix() const { return m_xmf4x4View; }
 	const XMFLOAT4X4& GetProjectionMatrix() const { return m_xmf4x4Projection; }
 
-	// 카메라 모드 게터/세터
 	ECameraMode GetMode() const { return m_eMode; }
 	void SetMode(ECameraMode eMode) { m_eMode = eMode; }
 };

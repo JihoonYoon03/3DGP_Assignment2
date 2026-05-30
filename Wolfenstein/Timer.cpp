@@ -39,7 +39,6 @@ void CGameTimer::Tick(float fLockFPS)
 
 	if (fLockFPS > 0.0f) {
 
-		// 프레임이 fLockFPS 보다 빠르면 그 차이 시간만큼 대기하여 프레임을 잠근다.
 		while (fTimeElapsed < (1.0f / fLockFPS)) {
 			if (m_bHardwareHasPerformanceCounter) {
 				::QueryPerformanceCounter((LARGE_INTEGER*)&m_nCurrentTime);
@@ -47,17 +46,11 @@ void CGameTimer::Tick(float fLockFPS)
 			else {
 				//m_nCurrentTime = ::timeGetTime();
 			}
-			// 다시 한 번 경과 시간을 계산한다.
 			fTimeElapsed = (m_nCurrentTime - m_nLastTime) * m_fTimeScale;
 		}
 	}
-	// 현재 시간을 m_nLastTime 에 저장한다.
 	m_nLastTime = m_nCurrentTime;
 
-	/*
-	?????? ?????? o?? ?ð??? ???? ?????? o?? ?ð??? ????? 1????? ??????
-	???? ?????? o?? ?ð??? m_fFrameTime[0] ?? ???????.
-	*/
 	if (fabsf(fTimeElapsed - m_fTimeElapsed) < 1.0f)
 	{
 		::memmove(&m_fFrameTime[1], m_fFrameTime, (MAX_SAMPLE_COUNT - 1) *
@@ -66,7 +59,6 @@ void CGameTimer::Tick(float fLockFPS)
 		if (m_nSampleCount < MAX_SAMPLE_COUNT) m_nSampleCount++;
 	}
 
-	// 초당 프레임 수를 1 증가시키고, 누적 시간이 1초가 넘었는지 확인한다.
 	m_nFramesPerSecond++;
 	m_fFPSTimeElapsed += fTimeElapsed;
 	if (m_fFPSTimeElapsed > 1.0f)
@@ -76,7 +68,6 @@ void CGameTimer::Tick(float fLockFPS)
 		m_fFPSTimeElapsed = 0.0f;
 	}
 
-	// 경과 시간을 최근 평균에서 빼고 새 경과 시간을 더한다.
 	m_fTimeElapsed = 0.0f;
 	for (ULONG i = 0; i < m_nSampleCount; i++) {
 		m_fTimeElapsed += m_fFrameTime[i];
@@ -89,7 +80,6 @@ void CGameTimer::Tick(float fLockFPS)
 
 unsigned long CGameTimer::GetFrameRate(LPTSTR lpszString, int nCharacters)
 {
-	// 현재 프레임 레이트와 누적 경과 시간을 lpszString 끝에 ' FPS)' 형식으로 덧붙인다.
 	if (lpszString)	{
 		_itow_s(m_nCurrentFrameRate, lpszString, nCharacters, 10);
 		wcscat_s(lpszString, nCharacters, _T(" FPS)"));

@@ -8,11 +8,11 @@ struct MapInfo {
 	XMFLOAT3 cameraLookAt;
 };
 
-// 맵 1: 어두운 회청색 톤 미로
+// 맵 1
 void BuildMap1Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	std::vector<std::shared_ptr<CGameObject>>& vObjects);
 
-// 맵 2: 따뜻한 갈색 톤 미로
+// 맵 2
 void BuildMap2Objects(ID3D12Device* pd3dDevice, ID3D12GraphicsCommandList* pd3dCommandList,
 	std::vector<std::shared_ptr<CGameObject>>& vObjects);
 
@@ -27,17 +27,17 @@ enum class SceneState : int;
 // 그리드 한 셀의 월드 크기
 static constexpr float MAP_TILE_SIZE = 4.0f;
 
-// (x,z) 위치 이동 가능 여부 판정
+// x, z 위치 이동 가능 여부 판정
 bool IsBlockedInMap(SceneState state, float x, float z, float fFeetY);
 
-// (x,z) 위치의 바닥 높이 반환
+// x, z 위치의 바닥 높이 반환
 float GetFloorHeightAt(SceneState state, float x, float z);
 
-// 시작점에서 방향으로 광선을 쏴 벽까지의 거리를 클램프 (TPS 카메라 충돌용)
+// 스프링 암
 float ClampDistanceAgainstWalls(SceneState state,
 	XMFLOAT3 fromXZ, XMFLOAT3 dirXZ, float maxDist, float eyeY);
 
-// 두 점 사이 수평 시야 가시성 (적 AI LOS 판정)
+// 적 AI의 플레이어 포착 여부 판별 함수
 bool HasLineOfSight(SceneState state, XMFLOAT3 from, XMFLOAT3 to, float eyeY);
 
 // 적 스폰 가능 위치 중 플레이어로부터 떨어진 곳을 무작위로 선택
